@@ -1,0 +1,16 @@
+# Local secrets and developer-specific configuration
+.env
+.env.*
+!.env.example
+
+# Build output and dependencies
+node_modules/
+.next/
+dist/
+coverage/
+
+# Local tooling
+.DS_Store
+*.log
+
+backend/generated/prisma/
