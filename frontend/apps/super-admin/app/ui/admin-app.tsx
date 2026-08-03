@@ -51,8 +51,21 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
       ...init,
       headers: { "content-type": "application/json", ...init?.headers },
     }),
-    b = (await r.json().catch(() => ({}))) as { data?: T; error?: string };
-  if (!r.ok) throw new Error(b.error ?? "Request failed.");
+    b = (await r.json().catch(() => ({}))) as {
+      data?: T;
+      error?: string;
+      details?: Array<{ field?: string; message?: string }>;
+    };
+  if (!r.ok) {
+    const details = b.details
+      ?.map((detail) => `${detail.field || "request"}: ${detail.message || "invalid value"}`)
+      .join("; ");
+    throw new Error(
+      details
+        ? `${b.error ?? "Request failed."} ${details}`
+        : (b.error ?? "Request failed."),
+    );
+  }
   return b.data as T;
 }
 export default function AdminApp() {
