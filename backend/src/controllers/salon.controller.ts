@@ -25,6 +25,9 @@ export async function updateSettings(request: Request, response: Response) {
   });
   ok(response, settingsDto(item));
 }
+
+
+
 export async function listNotifications(_request: Request, response: Response) {
   ok(
     response,
@@ -35,6 +38,8 @@ export async function listNotifications(_request: Request, response: Response) {
     }),
   );
 }
+
+
 export async function markNotificationRead(
   request: Request,
   response: Response,

@@ -1,0 +1,10 @@
+{
+  "name": "dropxcutz",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend/apps/salon-erp run dev"
+  }
+}
