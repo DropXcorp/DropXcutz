@@ -38,6 +38,41 @@ import type {
   Subscription,
 } from "./admin-ui";
 const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+const salonCode = (...values: Array<FormDataEntryValue | null>) => {
+  for (const value of values) {
+    const code = String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60)
+      .replace(/-+$/g, "");
+    if (code) return code;
+  }
+  return "salon";
+};
+const generateTemporaryPassword = () => {
+  const lowercase = "abcdefghijkmnopqrstuvwxyz";
+  const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digits = "23456789";
+  const symbols = "!@#$%&*?";
+  const groups = [lowercase, uppercase, digits, symbols];
+  const alphabet = groups.join("");
+  const randomInt = (max: number) => {
+    const cryptoApi = globalThis.crypto;
+    if (cryptoApi?.getRandomValues) {
+      return cryptoApi.getRandomValues(new Uint32Array(1))[0] % max;
+    }
+    return Math.floor(Math.random() * max);
+  };
+  const pick = (chars: string) => chars[randomInt(chars.length)];
+  return [
+    ...groups.map(pick),
+    ...Array.from({ length: 12 }, () => pick(alphabet)),
+  ]
+    .sort(() => randomInt(2 ** 32) - 2 ** 31)
+    .join("");
+};
 const copy: Record<Section, string> = {
   Overview: "A live view of your platform performance and account health.",
   Salons: "Manage every salon workspace from one place.",
@@ -80,7 +115,10 @@ export default function AdminApp() {
     [success, setSuccess] = useState(""),
     [search, setSearch] = useState(""),
     [mobile, setMobile] = useState(false),
-    [create, setCreate] = useState(false);
+    [create, setCreate] = useState(false),
+    [temporaryPassword, setTemporaryPassword] = useState(
+      generateTemporaryPassword,
+    );
   const load = useCallback(async () => {
     try {
       setSalons(await api<Salon[]>("/api/salons"));
@@ -165,12 +203,16 @@ export default function AdminApp() {
       setSubmitting(false);
     }
   }
+  function openCreate() {
+    setTemporaryPassword(generateTemporaryPassword());
+    setCreate(true);
+  }
   async function createSalon(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const el = e.currentTarget,
       f = new FormData(el),
       p = {
-        code: String(f.get("code")),
+        code: salonCode(f.get("code"), f.get("salonName")),
         salonName: String(f.get("salonName")),
         legalName: String(f.get("legalName")),
         phone: String(f.get("phone")),
@@ -205,6 +247,7 @@ export default function AdminApp() {
     try {
       await api("/api/salons", { method: "POST", body: JSON.stringify(p) });
       el.reset();
+      setTemporaryPassword(generateTemporaryPassword());
       setCreate(false);
       setSuccess(`${p.salonName} was added successfully.`);
       setSection("Salons");
@@ -319,7 +362,7 @@ export default function AdminApp() {
               </div>
             </div>
             {(section === "Overview" || section === "Salons") && (
-              <button onClick={() => setCreate(true)} className={buttonClass}>
+              <button onClick={openCreate} className={buttonClass}>
                 <Plus className="h-4 w-4" />
                 Add salon
               </button>
@@ -359,7 +402,7 @@ export default function AdminApp() {
                 loading={loading}
                 search={search}
                 setSearch={setSearch}
-                onCreate={() => setCreate(true)}
+                onCreate={openCreate}
               />
             )}{" "}
             {section === "Subscriptions" && (
@@ -397,6 +440,11 @@ export default function AdminApp() {
           onSubmit={createSalon}
           onClose={() => setCreate(false)}
           submitting={submitting}
+          temporaryPassword={temporaryPassword}
+          onTemporaryPasswordChange={setTemporaryPassword}
+          onGeneratePassword={() =>
+            setTemporaryPassword(generateTemporaryPassword())
+          }
         />
       )}
     </main>

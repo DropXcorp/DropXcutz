@@ -807,10 +807,16 @@ export function CreateSalonModal({
   onSubmit,
   onClose,
   submitting,
+  temporaryPassword,
+  onTemporaryPasswordChange,
+  onGeneratePassword,
 }: {
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   submitting: boolean;
+  temporaryPassword: string;
+  onTemporaryPasswordChange: (value: string) => void;
+  onGeneratePassword: () => void;
 }) {
   return (
     <div
@@ -860,13 +866,28 @@ export function CreateSalonModal({
             <Input name="adminName" label="Administrator name" />
             <Input name="adminEmail" label="Administrator email" type="email" />
             <div className="sm:col-span-2">
-              <Input
-                name="adminPassword"
-                label="Temporary password"
-                type="password"
-                minLength={12}
-                hint="Use at least 12 characters."
-              />
+              <Field label="Temporary password" hint="Auto-generated with uppercase, lowercase, number and symbol. Share it securely with the salon admin.">
+                <div className="flex gap-2">
+                  <input
+                    required
+                    name="adminPassword"
+                    type="text"
+                    minLength={12}
+                    value={temporaryPassword}
+                    onChange={(event) =>
+                      onTemporaryPasswordChange(event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={onGeneratePassword}
+                    className="shrink-0 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Generate
+                  </button>
+                </div>
+              </Field>
             </div>
           </div>
         </div>

@@ -4,6 +4,24 @@ const requiredText = z.string().trim().min(1).max(200);
 const optionalText = z.string().trim().max(5000).optional().nullable();
 const money = z.coerce.number().finite().min(0).max(999_999_999.99);
 const nonNegativeInt = z.coerce.number().int().min(0);
+const slug = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/g, "");
+const salonCode = z
+  .string()
+  .transform(slug)
+  .pipe(
+    z
+      .string()
+      .min(1, "Salon code must contain at least one letter or number.")
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .max(60),
+  );
 
 export const customerInput = z.object({
   name: requiredText,
@@ -147,11 +165,7 @@ export const settingsInput = z.object({
 });
 
 export const salonCreateInput = settingsInput.extend({
-  code: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    .max(60),
+  code: salonCode,
   status: z.enum(["TRIAL", "ACTIVE", "SUSPENDED", "ARCHIVED"]).default("TRIAL"),
   subscriptionPlan: z.string().trim().min(1).max(60).default("Starter"),
   trialEndsAt: z.coerce.date().optional().nullable(),
