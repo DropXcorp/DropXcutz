@@ -32,10 +32,13 @@ export async function listSalons(_request: Request, response: Response) {
 }
 export async function createSalon(request: Request, response: Response) {
   const input = salonCreateInput.parse(request.body);
+  const normalizedEmail = input.email.toLowerCase();
+  const normalizedAdminEmail = input.adminEmail.toLowerCase();
   const item = await prisma.$transaction(async (tx) => {
     const salon = await tx.salon.create({
       data: {
         ...input,
+        email: normalizedEmail,
         gstin: input.gstin || null,
         logoUrl: input.logoUrl || null,
         website: input.website || null,
@@ -49,7 +52,7 @@ export async function createSalon(request: Request, response: Response) {
       data: {
         salonId: salon.id,
         name: input.adminName,
-        email: input.adminEmail.toLowerCase(),
+        email: normalizedAdminEmail,
         passwordHash: await bcrypt.hash(input.adminPassword, 12),
         role: "SALON_ADMIN",
       },
@@ -159,26 +162,27 @@ export async function updatePlatformSettings(
   response: Response,
 ) {
   const input = request.body ?? {};
+  const data = {
+    ...(typeof input.platformName === "string" && {
+      platformName: input.platformName.trim().slice(0, 160),
+    }),
+    ...(typeof input.supportEmail === "string" && {
+      supportEmail: input.supportEmail.trim() || null,
+    }),
+    ...(Number.isInteger(input.defaultTrialDays) && {
+      defaultTrialDays: input.defaultTrialDays,
+    }),
+    ...(Number.isInteger(input.sessionHours) && {
+      sessionHours: input.sessionHours,
+    }),
+    ...(Number.isInteger(input.passwordMinimumLength) && {
+      passwordMinimumLength: input.passwordMinimumLength,
+    }),
+  };
   const settings = await prisma.platformSettings.upsert({
     where: { id: "platform" },
-    update: {
-      ...(typeof input.platformName === "string" && {
-        platformName: input.platformName.slice(0, 160),
-      }),
-      ...(typeof input.supportEmail === "string" && {
-        supportEmail: input.supportEmail || null,
-      }),
-      ...(Number.isInteger(input.defaultTrialDays) && {
-        defaultTrialDays: input.defaultTrialDays,
-      }),
-      ...(Number.isInteger(input.sessionHours) && {
-        sessionHours: input.sessionHours,
-      }),
-      ...(Number.isInteger(input.passwordMinimumLength) && {
-        passwordMinimumLength: input.passwordMinimumLength,
-      }),
-    },
-    create: { id: "platform" },
+    update: data,
+    create: { id: "platform", ...data },
   });
   await audit(
     response.locals.user?.id,
