@@ -19,8 +19,6 @@ const jwtSecret = () => {
   return secret;
 };
 
-
-
 const parseCookie = (request: Request, name: string) =>
   request.headers.cookie
     ?.split(";")

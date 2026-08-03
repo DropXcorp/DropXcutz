@@ -1,0 +1,20 @@
+import type { Branch } from "../../../generated/prisma/client";
+export const branchDto = (branch: Branch) => ({
+  id: branch.id,
+  name: branch.name,
+  code: branch.code,
+  phone: branch.phone,
+  email: branch.email,
+  address: branch.address,
+  city: branch.city,
+  state: branch.state,
+  postalCode: branch.postalCode,
+  latitude: branch.latitude === null ? null : Number(branch.latitude),
+  longitude: branch.longitude === null ? null : Number(branch.longitude),
+  openingTime: branch.openingTime,
+  closingTime: branch.closingTime,
+  status: branch.status,
+  isActive: branch.isActive,
+  createdAt: branch.createdAt,
+  updatedAt: branch.updatedAt,
+});

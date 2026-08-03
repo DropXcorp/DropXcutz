@@ -20,6 +20,7 @@
     "src/middleware/**/*.ts",
     "src/routes/**/*.ts",
     "src/services/**/*.ts",
+    "src/modules/**/*.ts",
     "src/validators/**/*.ts",
     "prisma/seed.ts"
   ]
