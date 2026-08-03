@@ -18,6 +18,9 @@ const jwtSecret = () => {
     );
   return secret;
 };
+
+
+
 const parseCookie = (request: Request, name: string) =>
   request.headers.cookie
     ?.split(";")
@@ -57,12 +60,20 @@ export async function login(request: Request, response: Response) {
   });
   response.setHeader("Set-Cookie", cookie(token, 60 * 60 * 8));
   ok(response, {
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: user.mustChangePassword,
+    },
     salon: user.salon
       ? { id: user.salon.id, code: user.salon.code, name: user.salon.salonName }
       : null,
   });
 }
+
+
 export async function logout(request: Request, response: Response) {
   const token = parseCookie(request, cookieName);
   if (token) {
@@ -77,26 +88,39 @@ export async function logout(request: Request, response: Response) {
   response.setHeader("Set-Cookie", cookie("", 0));
   response.status(204).end();
 }
+
+
 export async function me(_request: Request, response: Response) {
   const user = response.locals.user;
   ok(response, {
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: user.mustChangePassword,
+    },
     salon: user.salon
       ? { id: user.salon.id, code: user.salon.code, name: user.salon.salonName }
       : null,
   });
 }
+
+
 export async function changePassword(request: Request, response: Response) {
   const user = response.locals.user;
   const currentPassword = String(request.body?.currentPassword ?? "");
   const newPassword = String(request.body?.newPassword ?? "");
-  if (newPassword.length < 12)
-    throw new ApiError(400, "New password must be at least 12 characters.");
+  if (newPassword.length < 8)
+    throw new ApiError(400, "New password must be at least 8 characters.");
   if (!(await bcrypt.compare(currentPassword, user.passwordHash)))
     throw new ApiError(401, "Current password is incorrect.");
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash: await bcrypt.hash(newPassword, 12) },
+    data: {
+      passwordHash: await bcrypt.hash(newPassword, 12),
+      mustChangePassword: false,
+    },
   });
   await prisma.session.deleteMany({
     where: { userId: user.id, id: { not: response.locals.session.id } },

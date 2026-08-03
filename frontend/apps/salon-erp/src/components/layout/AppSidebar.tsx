@@ -13,7 +13,6 @@ import {
   Wallet,
   BarChart3,
   Settings,
-  ShieldCheck,
 } from "lucide-react";
 
 import AppLogo from "@/src/components/layout/AppLogo";
@@ -86,11 +85,6 @@ const menu = [
         href: "/settings",
         icon: Settings,
       },
-      {
-        name: "Super Admin",
-        href: "/super-admin",
-        icon: ShieldCheck,
-      },
     ],
   },
 ];
@@ -157,23 +151,7 @@ export default function AppSidebar({
 
       {/* Footer */}
       <div className="border-t border-zinc-200 p-5">
-        <div className="flex items-center gap-3 rounded-2xl bg-zinc-100 p-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm font-bold text-white">
-            N
-          </div>
-
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-zinc-900">
-              Nandini
-            </p>
-
-            <p className="text-xs text-zinc-500">
-              Administrator
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 text-center">
+        <div className="text-center">
           <p className="text-xs font-semibold text-zinc-800">
             DropXCut ERP
           </p>

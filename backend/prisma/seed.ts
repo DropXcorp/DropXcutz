@@ -9,7 +9,7 @@ const password = process.env.PLATFORM_ADMIN_PASSWORD;
 
 if (!connectionString) throw new Error("DATABASE_URL is required.");
 if (!email || !password) throw new Error("PLATFORM_ADMIN_EMAIL and PLATFORM_ADMIN_PASSWORD are required to create the first platform admin.");
-if (password.length < 12) throw new Error("PLATFORM_ADMIN_PASSWORD must be at least 12 characters.");
+if (password.length < 8) throw new Error("PLATFORM_ADMIN_PASSWORD must be at least 8 characters.");
 
 const platformEmail = email!;
 const platformPassword = password!;

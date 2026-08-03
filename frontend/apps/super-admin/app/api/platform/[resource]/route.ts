@@ -29,4 +29,9 @@ export async function PUT(
   { params }: { params: Promise<{ resource: string }> },
 ) {
   return forward(request, (await params).resource, "PUT");
+}export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ resource: string }> },
+) {
+  return forward(request, (await params).resource, "POST");
 }

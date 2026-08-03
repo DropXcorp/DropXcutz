@@ -2,6 +2,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Bell,
+  BarChart3,
   Building2,
   CreditCard,
   FileClock,
@@ -16,9 +18,11 @@ import {
   AuditView,
   Brand,
   CreateSalonModal,
+  FinancialView,
   FullPageLoader,
   Navigation,
   Notice,
+  NotificationView,
   Overview,
   SalonsView,
   SectionHeading,
@@ -80,6 +84,8 @@ const copy: Record<Section, string> = {
   Subscriptions: "Track plans, trials and account status.",
   "Audit Log": "A chronological record of platform activity.",
   Settings: "Configure security and platform-wide defaults.",
+  Notifications: "Send announcements directly to ERP workspaces.",
+  Financials: "Platform-wide revenue and operating performance.",
 };
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, {
@@ -93,7 +99,10 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
     };
   if (!r.ok) {
     const details = b.details
-      ?.map((detail) => `${detail.field || "request"}: ${detail.message || "invalid value"}`)
+      ?.map(
+        (detail) =>
+          `${detail.field || "request"}: ${detail.message || "invalid value"}`,
+      )
       .join("; ");
     throw new Error(
       details
@@ -137,7 +146,13 @@ export default function AdminApp() {
     void load();
   }, [load]);
   useEffect(() => {
-    if (!auth || section === "Overview" || section === "Salons") {
+    if (
+      !auth ||
+      section === "Overview" ||
+      section === "Salons" ||
+      section === "Notifications" ||
+      section === "Financials"
+    ) {
       setData(null);
       return;
     }
@@ -246,10 +261,26 @@ export default function AdminApp() {
     setError("");
     try {
       await api("/api/salons", { method: "POST", body: JSON.stringify(p) });
+      const erpUrl = process.env.NEXT_PUBLIC_ERP_URL ?? "http://localhost:3000";
+      const credentials = [
+        "DropXcutz salon admin login",
+        `Salon: ${p.salonName}`,
+        `Salon code: ${p.code}`,
+        `ERP URL: ${erpUrl}`,
+        `Email: ${p.adminEmail}`,
+        `Password: ${p.adminPassword}`,
+      ].join("\n");
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(credentials);
+        copied = true;
+      } catch {}
       el.reset();
       setTemporaryPassword(generateTemporaryPassword());
       setCreate(false);
-      setSuccess(`${p.salonName} was added successfully.`);
+      setSuccess(
+        `${p.salonName} was added successfully${copied ? " and the admin credentials were copied to your clipboard" : "; copy the admin credentials manually"}.`,
+      );
       setSection("Salons");
       await load();
     } catch (x) {
@@ -281,6 +312,34 @@ export default function AdminApp() {
       setSubmitting(false);
     }
   }
+  async function sendNotification(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formElement = e.currentTarget;
+    const form = new FormData(formElement);
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await api<{ count: number }>(
+        "/api/platform/notifications",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            salonId: form.get("salonId"),
+            title: form.get("title"),
+            message: form.get("message"),
+          }),
+        },
+      );
+      formElement.reset();
+      setSuccess(
+        `Notification sent to ${result.count} salon${result.count === 1 ? "" : "s"}.`,
+      );
+    } catch (x) {
+      setError(x instanceof Error ? x.message : "Could not send notification.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
   async function toggleUser(u: PlatformUser) {
     try {
       const x = await api<PlatformUser>(`/api/platform/users/${u.id}`, {
@@ -300,6 +359,8 @@ export default function AdminApp() {
     [CreditCard, "Subscriptions"],
     [FileClock, "Audit Log"],
     [Settings, "Settings"],
+    [Bell, "Notifications"],
+    [BarChart3, "Financials"],
   ] as const;
   const choose = (s: Section) => {
     setSection(s);
@@ -321,8 +382,8 @@ export default function AdminApp() {
     appointments = salons.reduce((n, s) => n + s._count.appointments, 0),
     revenue = salons.reduce((n, s) => n + s.paidRevenue, 0);
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+    <main className="min-h-screen bg-zinc-100 text-zinc-950">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-zinc-200 bg-white lg:flex lg:flex-col">
         <div className="p-6 pb-3">
           <Brand />
         </div>
@@ -331,7 +392,7 @@ export default function AdminApp() {
       </aside>
       {mobile && (
         <div
-          className="fixed inset-0 z-50 bg-slate-950/40 lg:hidden"
+          className="fixed inset-0 z-50 bg-zinc-950/40 lg:hidden"
           onClick={() => setMobile(false)}
         >
           <aside
@@ -350,22 +411,31 @@ export default function AdminApp() {
         </div>
       )}
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
               <button onClick={() => setMobile(true)} className="lg:hidden">
                 <Menu />
               </button>
               <div>
-                <p className="text-xs text-slate-400">Workspace / {section}</p>
+                <p className="text-xs text-zinc-400">Workspace / {section}</p>
                 <h1 className="text-xl font-bold">{section}</h1>
               </div>
             </div>
             {(section === "Overview" || section === "Salons") && (
-              <button onClick={openCreate} className={buttonClass}>
-                <Plus className="h-4 w-4" />
-                Add salon
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => choose("Notifications")}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                >
+                  <Bell className="h-4 w-4" />
+                  Send notification
+                </button>
+                <button onClick={openCreate} className={buttonClass}>
+                  <Plus className="h-4 w-4" />
+                  Add salon
+                </button>
+              </div>
             )}
           </div>
         </header>
@@ -422,6 +492,14 @@ export default function AdminApp() {
               <AuditView
                 items={list<AuditItem>(data)}
                 loading={sectionLoading}
+              />
+            )}{" "}
+            {section === "Financials" && <FinancialView salons={salons} />}{" "}
+            {section === "Notifications" && (
+              <NotificationView
+                salons={salons}
+                submitting={submitting}
+                onSubmit={sendNotification}
               />
             )}{" "}
             {section === "Settings" && (

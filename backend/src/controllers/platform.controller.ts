@@ -34,10 +34,11 @@ export async function createSalon(request: Request, response: Response) {
   const input = salonCreateInput.parse(request.body);
   const normalizedEmail = input.email.toLowerCase();
   const normalizedAdminEmail = input.adminEmail.toLowerCase();
+  const { adminPassword, ...salonInput } = input;
   const item = await prisma.$transaction(async (tx) => {
     const salon = await tx.salon.create({
       data: {
-        ...input,
+        ...salonInput,
         email: normalizedEmail,
         gstin: input.gstin || null,
         logoUrl: input.logoUrl || null,
@@ -53,13 +54,46 @@ export async function createSalon(request: Request, response: Response) {
         salonId: salon.id,
         name: input.adminName,
         email: normalizedAdminEmail,
-        passwordHash: await bcrypt.hash(input.adminPassword, 12),
+        passwordHash: await bcrypt.hash(adminPassword, 12),
+        mustChangePassword: true,
         role: "SALON_ADMIN",
       },
     });
     return salon;
   });
   created(response, { ...item, taxRate: Number(item.taxRate) });
+}
+export async function sendNotification(request: Request, response: Response) {
+  const target = String(request.body?.salonId ?? "").trim();
+  const title = String(request.body?.title ?? "").trim();
+  const message = String(request.body?.message ?? "").trim();
+  if (!target || !title || !message) {
+    throw new ApiError(400, "Salon, title and message are required.");
+  }
+  if (title.length > 160)
+    throw new ApiError(400, "Title must be 160 characters or fewer.");
+  if (message.length > 5000)
+    throw new ApiError(400, "Message must be 5000 characters or fewer.");
+  const salons =
+    target === "all"
+      ? await prisma.salon.findMany({
+          where: { status: { not: "ARCHIVED" } },
+          select: { id: true },
+        })
+      : await prisma.salon.findMany({
+          where: { id: target },
+          select: { id: true },
+        });
+  if (!salons.length) throw new ApiError(404, "Salon not found.");
+  await prisma.notification.createMany({
+    data: salons.map((salon) => ({
+      salonId: salon.id,
+      type: "SYSTEM" as const,
+      title,
+      message,
+    })),
+  });
+  ok(response, { count: salons.length });
 }
 export async function updateSalon(request: Request, response: Response) {
   const id = String(request.params.id);

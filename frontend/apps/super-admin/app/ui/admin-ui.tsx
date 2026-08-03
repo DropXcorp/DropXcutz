@@ -1,6 +1,8 @@
+import { motion } from "framer-motion";
 import {
   Activity,
   ArrowUpRight,
+  Bell,
   Building2,
   CalendarDays,
   Check,
@@ -10,7 +12,6 @@ import {
   Plus,
   Search,
   ShieldCheck,
-  Sparkles,
   Users,
   X,
 } from "lucide-react";
@@ -65,11 +66,13 @@ export type Section =
   | "Users"
   | "Subscriptions"
   | "Audit Log"
-  | "Settings";
+  | "Settings"
+  | "Notifications"
+  | "Financials";
 export const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10";
+  "w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-4 focus:ring-zinc-500/10";
 export const buttonClass =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-700 disabled:opacity-60";
 const money = (v: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -86,17 +89,17 @@ const tones: Record<Status, string> = {
   ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
   TRIAL: "border-amber-200 bg-amber-50 text-amber-700",
   SUSPENDED: "border-rose-200 bg-rose-50 text-rose-700",
-  ARCHIVED: "border-slate-200 bg-slate-100 text-slate-600",
+  ARCHIVED: "border-zinc-200 bg-zinc-100 text-zinc-700",
 };
 export function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-600 text-white">
-        <Sparkles className="h-5 w-5" />
+      <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-900 text-white">
+        <span className="text-lg font-bold">DX</span>
       </div>
       <div>
         <b>DropXCutz</b>
-        <p className="text-xs text-slate-500">Super admin</p>
+        <p className="text-xs text-zinc-500">Super admin</p>
       </div>
     </div>
   );
@@ -112,34 +115,36 @@ export function Navigation({
 }) {
   return (
     <nav className="flex-1 space-y-1 px-3 py-5">
-      <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+      <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-widest text-zinc-400">
         Manage
       </p>
       {items.map(([Icon, label]) => (
-        <button
+        <motion.button
           key={label}
           onClick={() => choose(label)}
-          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${section === label ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}
+          whileHover={{ x: 3 }}
+          whileTap={{ scale: 0.98 }}
+          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${section === label ? "bg-zinc-950 text-white" : "text-zinc-700 hover:bg-zinc-50"}`}
         >
           <Icon className="h-[18px] w-[18px]" />
           {label}
           {section === label && (
-            <i className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-600" />
+            <i className="ml-auto h-1.5 w-1.5 rounded-full bg-zinc-900" />
           )}
-        </button>
+        </motion.button>
       ))}
     </nav>
   );
 }
 export function SidebarFooter() {
   return (
-    <div className="m-3 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-      <b className="grid h-9 w-9 place-items-center rounded-full bg-slate-900 text-xs text-white">
+    <div className="m-3 flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+      <b className="grid h-9 w-9 place-items-center rounded-full bg-zinc-900 text-xs text-white">
         SA
       </b>
       <div>
         <p className="text-sm font-semibold">Super Admin</p>
-        <p className="text-xs text-slate-500">Platform access</p>
+        <p className="text-xs text-zinc-500">Platform access</p>
       </div>
       <ShieldCheck className="ml-auto h-4 w-4 text-emerald-600" />
     </div>
@@ -157,16 +162,16 @@ export function SectionHeading({
       <h2 className="text-2xl font-bold tracking-tight sm:text-[28px]">
         {title}
       </h2>
-      <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+      <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
     </div>
   );
 }
 export function FullPageLoader() {
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-50">
+    <main className="grid min-h-screen place-items-center bg-zinc-50">
       <div className="text-center">
-        <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
-        <p className="mt-4 text-sm text-slate-500">Loading your workspace?</p>
+        <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-zinc-100 border-t-zinc-600" />
+        <p className="mt-4 text-sm text-zinc-500">Loading your workspace?</p>
       </div>
     </main>
   );
@@ -205,9 +210,9 @@ function Field({
 }) {
   return (
     <label className="block">
-      <b className="mb-2 block text-sm text-slate-700">{label}</b>
+      <b className="mb-2 block text-sm text-zinc-700">{label}</b>
       {children}
-      {hint && <small className="mt-1 block text-slate-400">{hint}</small>}
+      {hint && <small className="mt-1 block text-zinc-400">{hint}</small>}
     </label>
   );
 }
@@ -237,11 +242,11 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <header className="flex justify-between border-b border-zinc-100 px-5 py-4 sm:px-6">
         <div>
           <h3 className="font-bold">{title}</h3>
-          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+          <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
         </div>
         {action}
       </header>
@@ -257,7 +262,7 @@ function Avatar({ name, round = false }: { name: string; round?: boolean }) {
     .join("");
   return (
     <b
-      className={`grid h-10 w-10 shrink-0 place-items-center bg-indigo-50 text-sm text-indigo-700 ${round ? "rounded-full" : "rounded-xl"}`}
+      className={`grid h-10 w-10 shrink-0 place-items-center bg-zinc-50 text-sm text-zinc-700 ${round ? "rounded-full" : "rounded-xl"}`}
     >
       {s}
     </b>
@@ -285,9 +290,9 @@ function Empty({
   return (
     <div className="grid min-h-56 place-items-center p-8 text-center">
       <div>
-        <Search className="mx-auto h-6 w-6 text-slate-300" />
+        <Search className="mx-auto h-6 w-6 text-zinc-300" />
         <b className="mt-4 block">{title}</b>
-        <p className="mt-1 text-sm text-slate-500">{message}</p>
+        <p className="mt-1 text-sm text-zinc-500">{message}</p>
         {action && <div className="mt-5">{action}</div>}
       </div>
     </div>
@@ -308,7 +313,7 @@ function Table({
     return (
       <div className="animate-pulse p-6">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="mb-4 h-12 rounded-xl bg-slate-100" />
+          <div key={i} className="mb-4 h-12 rounded-xl bg-zinc-100" />
         ))}
       </div>
     );
@@ -316,7 +321,7 @@ function Table({
   return (
     <div className="overflow-x-auto">
       <table className="admin-table min-w-full text-left text-sm">
-        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+        <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
           <tr>
             {head.map((x) => (
               <th key={x} className="px-5 py-3.5">
@@ -325,7 +330,7 @@ function Table({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">{children}</tbody>
+        <tbody className="divide-y divide-zinc-100">{children}</tbody>
       </table>
     </div>
   );
@@ -342,18 +347,21 @@ export function SignIn({
   clearError: () => void;
 }) {
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-950 p-5">
-      <div className="absolute h-[520px] w-[520px] rounded-full bg-indigo-600/25 blur-3xl" />
-      <form
+    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-zinc-950 p-5">
+      <div className="absolute h-[520px] w-[520px] rounded-full bg-zinc-900/25 blur-3xl" />
+      <motion.form
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
         onSubmit={onSubmit}
         onChange={clearError}
         className="relative w-full max-w-[440px] rounded-3xl bg-white p-8 shadow-2xl"
       >
         <Brand />
         <div className="mt-9">
-          <p className="text-sm font-semibold text-indigo-600">Welcome back</p>
+          <p className="text-sm font-semibold text-zinc-700">Welcome back</p>
           <h1 className="mt-1 text-3xl font-bold">Sign in to your workspace</h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-zinc-500">
             Use your platform administrator credentials to continue.
           </p>
         </div>
@@ -382,10 +390,10 @@ export function SignIn({
             />
           </Field>
           <button disabled={submitting} className={`${buttonClass} w-full`}>
-            {submitting ? "Signing in?" : "Sign in"}
+            {submitting ? "Signing in..." : "Sign in"}
           </button>
         </div>
-      </form>
+      </motion.form>
     </main>
   );
 }
@@ -416,15 +424,15 @@ export function Overview({
         {cards.map(([Icon, label, value]) => (
           <div
             key={label}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
           >
             <div className="flex justify-between">
               <div className="metric-icon">
                 <Icon className="h-5 w-5" />
               </div>
-              <ArrowUpRight className="h-4 w-4 text-slate-300" />
+              <ArrowUpRight className="h-4 w-4 text-zinc-300" />
             </div>
-            <p className="mt-5 text-sm text-slate-500">{label}</p>
+            <p className="mt-5 text-sm text-zinc-500">{label}</p>
             <p className="mt-1 text-2xl font-bold">{value}</p>
           </div>
         ))}
@@ -436,19 +444,19 @@ export function Overview({
           action={
             <button
               onClick={onViewSalons}
-              className="text-sm font-semibold text-indigo-600"
+              className="text-sm font-semibold text-zinc-700"
             >
               View all
             </button>
           }
         >
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-zinc-100">
             {salons.slice(0, 5).map((s) => (
               <div key={s.id} className="flex items-center gap-3 px-5 py-4">
                 <Avatar name={s.salonName} />
                 <div className="min-w-0 flex-1">
                   <b className="text-sm">{s.salonName}</b>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-zinc-500">
                     {s.code} ? {s.city || "Location pending"}
                   </p>
                 </div>
@@ -466,8 +474,8 @@ export function Overview({
         <Panel title="Platform health" subtitle="Account status at a glance">
           <div className="p-6">
             <p className="text-3xl font-bold">{rate}%</p>
-            <p className="text-sm text-slate-500">Active workspace rate</p>
-            <div className="mt-5 h-2 rounded-full bg-slate-100">
+            <p className="text-sm text-zinc-500">Active workspace rate</p>
+            <div className="mt-5 h-2 rounded-full bg-zinc-100">
               <div
                 className="h-2 rounded-full bg-emerald-500"
                 style={{ width: `${rate}%` }}
@@ -492,8 +500,8 @@ export function Overview({
 }
 function Health({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex rounded-xl bg-slate-50 p-3 text-sm">
-      <span className="flex-1 text-slate-600">{label}</span>
+    <div className="flex rounded-xl bg-zinc-50 p-3 text-sm">
+      <span className="flex-1 text-zinc-700">{label}</span>
       <b>{value}</b>
     </div>
   );
@@ -518,9 +526,9 @@ export function SalonsView({
       title="Salon directory"
       subtitle={`${total} workspaces on the platform`}
     >
-      <div className="border-b border-slate-100 p-4 sm:px-6">
+      <div className="border-b border-zinc-100 p-4 sm:px-6">
         <label className="relative block max-w-sm">
-          <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -563,7 +571,7 @@ export function SalonsView({
                 <Avatar name={s.salonName} />
                 <div>
                   <b>{s.salonName}</b>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-zinc-500">
                     {s.code} ? {s.city || "Location pending"}
                   </p>
                 </div>
@@ -618,7 +626,7 @@ export function SubscriptionsView({
           <tr key={x.id}>
             <td data-label="Salon" className="px-5 py-4">
               <b>{x.salonName}</b>
-              <p className="text-xs text-slate-500">{x.code}</p>
+              <p className="text-xs text-zinc-500">{x.code}</p>
             </td>
             <td data-label="Plan" className="px-5 py-4">
               {x.subscriptionPlan}
@@ -665,7 +673,7 @@ export function UsersView({
                 <Avatar name={u.name} round />
                 <div>
                   <b>{u.name}</b>
-                  <p className="text-xs text-slate-500">{u.email}</p>
+                  <p className="text-xs text-zinc-500">{u.email}</p>
                 </div>
               </div>
             </td>
@@ -691,6 +699,171 @@ export function UsersView({
           </tr>
         ))}
       </Table>
+    </Panel>
+  );
+}
+export function FinancialView({ salons }: { salons: Salon[] }) {
+  const revenue = salons.reduce((sum, salon) => sum + salon.paidRevenue, 0);
+  const customers = salons.reduce(
+    (sum, salon) => sum + salon._count.customers,
+    0,
+  );
+  const appointments = salons.reduce(
+    (sum, salon) => sum + salon._count.appointments,
+    0,
+  );
+  const average = salons.length ? revenue / salons.length : 0;
+  const ranked = [...salons].sort((a, b) => b.paidRevenue - a.paidRevenue);
+  const money = (value: number) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(value);
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Platform revenue", money(revenue), "Paid invoice revenue", "INR"],
+          ["Average per salon", money(average), "Across all workspaces", "AVG"],
+          [
+            "Platform customers",
+            String(customers),
+            "Across all salons",
+            "USERS",
+          ],
+          [
+            "Appointments",
+            String(appointments),
+            "Recorded appointments",
+            "APPT",
+          ],
+        ].map(([title, value, subtitle, icon], index) => (
+          <motion.div
+            key={title}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.06 }}
+            className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-zinc-500">{title}</p>
+                <p className="mt-3 text-3xl font-bold text-zinc-950">{value}</p>
+                <p className="mt-3 text-sm text-zinc-500">{subtitle}</p>
+              </div>
+              <span className="grid h-11 w-11 place-items-center rounded-xl bg-zinc-100 text-lg font-bold text-zinc-700">
+                {icon}
+              </span>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
+      >
+        <div className="border-b border-zinc-200 p-5">
+          <h3 className="text-lg font-semibold">Revenue by salon</h3>
+          <p className="mt-1 text-sm text-zinc-500">
+            Live paid revenue ranked by workspace
+          </p>
+        </div>
+        {!ranked.length ? (
+          <p className="p-8 text-center text-sm text-zinc-500">
+            No salon financial data yet.
+          </p>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {ranked.map((salon, index) => (
+              <motion.div
+                layout
+                key={salon.id}
+                className="flex items-center gap-4 p-5"
+              >
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-zinc-900 text-sm font-bold text-white">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-semibold">{salon.salonName}</p>
+                      <p className="text-xs text-zinc-500">
+                        {salon.code} - {salon._count.customers} customers
+                      </p>
+                    </div>
+                    <b>{money(salon.paidRevenue)}</b>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${revenue ? Math.max((salon.paidRevenue / revenue) * 100, 2) : 0}%`,
+                      }}
+                      transition={{ duration: 0.7, delay: index * 0.08 }}
+                      className="h-full rounded-full bg-zinc-900"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+export function NotificationView({
+  salons,
+  submitting,
+  onSubmit,
+}: {
+  salons: Salon[];
+  submitting: boolean;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Panel
+      title="Send ERP notification"
+      subtitle="Send an announcement to one salon or every active workspace."
+    >
+      <form onSubmit={onSubmit} className="grid gap-5 p-6">
+        <Field label="Recipient">
+          <select name="salonId" className={inputClass} defaultValue="all">
+            <option value="all">All salons</option>
+            {salons.map((salon) => (
+              <option key={salon.id} value={salon.id}>
+                {salon.salonName} ({salon.code})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Title">
+          <input
+            required
+            maxLength={160}
+            name="title"
+            className={inputClass}
+            placeholder="Important update"
+          />
+        </Field>
+        <Field label="Message">
+          <textarea
+            required
+            maxLength={5000}
+            name="message"
+            rows={5}
+            className={inputClass}
+            placeholder="Write the message ERP admins should see."
+          />
+        </Field>
+        <button disabled={submitting} className={`${buttonClass} w-fit`}>
+          <Bell className="h-4 w-4" />
+          {submitting ? "Sending..." : "Send notification"}
+        </button>
+      </form>
     </Panel>
   );
 }
@@ -721,7 +894,7 @@ export function AuditView({
               data-label="Action"
               className="px-5 py-4 font-semibold capitalize"
             >
-              <FileClock className="mr-2 inline h-4 w-4 text-indigo-600" />
+              <FileClock className="mr-2 inline h-4 w-4 text-zinc-700" />
               {String(x.action ?? "Unknown action")
                 .replaceAll("_", " ")
                 .toLowerCase()}
@@ -729,7 +902,7 @@ export function AuditView({
             <td data-label="Entity" className="px-5 py-4">
               {x.entity}
             </td>
-            <td data-label="Reference" className="px-5 py-4 text-slate-500">
+            <td data-label="Reference" className="px-5 py-4 text-zinc-500">
               {x.entityId || "?"}
             </td>
             <td data-label="Date" className="px-5 py-4">
@@ -753,7 +926,7 @@ export function SettingsView({
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }) {
   if (loading || !settings)
-    return <div className="h-64 animate-pulse rounded-2xl bg-slate-100" />;
+    return <div className="h-64 animate-pulse rounded-2xl bg-zinc-100" />;
   return (
     <form onSubmit={onSubmit}>
       <Panel
@@ -794,7 +967,7 @@ export function SettingsView({
             defaultValue={settings.passwordMinimumLength}
           />
         </div>
-        <div className="flex justify-end border-t border-slate-100 bg-slate-50 p-4">
+        <div className="flex justify-end border-t border-zinc-100 bg-zinc-50 p-4">
           <button disabled={submitting} className={buttonClass}>
             {submitting ? "Saving?" : "Save changes"}
           </button>
@@ -820,7 +993,7 @@ export function CreateSalonModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/50 sm:items-center sm:p-5"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/50 sm:items-center sm:p-5"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <form
@@ -830,11 +1003,11 @@ export function CreateSalonModal({
       >
         <header className="flex justify-between border-b p-5 sm:px-7">
           <div>
-            <p className="text-xs font-bold uppercase text-indigo-600">
+            <p className="text-xs font-bold uppercase text-zinc-700">
               New workspace
             </p>
             <h2 className="text-xl font-bold">Add a salon</h2>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-zinc-500">
               Create the workspace and its administrator.
             </p>
           </div>
@@ -860,19 +1033,22 @@ export function CreateSalonModal({
             <Input name="city" label="City" required={false} />
             <Input name="state" label="State" required={false} />
           </div>
-          <hr className="my-6 border-slate-100" />
+          <hr className="my-6 border-zinc-100" />
           <b>Administrator access</b>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Input name="adminName" label="Administrator name" />
             <Input name="adminEmail" label="Administrator email" type="email" />
             <div className="sm:col-span-2">
-              <Field label="Temporary password" hint="Auto-generated with uppercase, lowercase, number and symbol. Share it securely with the salon admin.">
+              <Field
+                label="Temporary password"
+                hint="Auto-generated with uppercase, lowercase, number and symbol. Share it securely with the salon admin."
+              >
                 <div className="flex gap-2">
                   <input
                     required
                     name="adminPassword"
                     type="text"
-                    minLength={12}
+                    minLength={8}
                     value={temporaryPassword}
                     onChange={(event) =>
                       onTemporaryPasswordChange(event.target.value)
@@ -882,7 +1058,7 @@ export function CreateSalonModal({
                   <button
                     type="button"
                     onClick={onGeneratePassword}
-                    className="shrink-0 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    className="shrink-0 rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
                   >
                     Generate
                   </button>
@@ -891,7 +1067,7 @@ export function CreateSalonModal({
             </div>
           </div>
         </div>
-        <footer className="flex justify-end gap-3 border-t bg-slate-50 p-4 sm:px-7">
+        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
           <button
             type="button"
             onClick={onClose}

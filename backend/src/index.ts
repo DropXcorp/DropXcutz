@@ -20,6 +20,7 @@ app.disable("x-powered-by");
 app.use(
   cors({
     origin: origins,
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
 );

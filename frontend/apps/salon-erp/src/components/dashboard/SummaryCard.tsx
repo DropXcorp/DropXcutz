@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { LucideIcon, TrendingUp } from "lucide-react";
 
 interface SummaryCardProps {
@@ -14,7 +15,7 @@ export default function SummaryCard({
   icon: Icon,
 }: SummaryCardProps) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
+    <motion.div whileHover={{ y: -3 }} transition={{ type: "spring", stiffness: 320, damping: 24 }} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm font-medium text-zinc-500">{title}</p>
@@ -32,6 +33,6 @@ export default function SummaryCard({
           <Icon className="h-6 w-6 text-zinc-700" />
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -18,14 +18,18 @@ export type SalonSettings = {
   adminName: string; adminEmail: string; lowStockAlerts: boolean; dailyRevenueDigest: boolean;
 };
 
+export type ERPUser = { id: string; name: string; email: string; role: string; mustChangePassword: boolean };
+export type ERPSalon = { id: string; code: string; name: string };
 type Snapshot = {
   customers: Customer[]; employees: Employee[]; services: Service[]; inventory: InventoryItem[];
   appointments: AppointmentTableItem[]; invoices: Invoice[]; payroll: PayrollRun[]; notifications: Notification[]; settings: SalonSettings;
 };
 
 type ERPState = Snapshot & {
+  currentUser: ERPUser | null;
+  currentSalon: ERPSalon | null;
   loading: boolean; hydrated: boolean; error: string | null;
-  hydrate: () => Promise<void>; clearError: () => void;
+  hydrate: () => Promise<void>; refresh: () => Promise<void>; clearError: () => void;
   addCustomer: (item: Omit<Customer, "id" | "points" | "totalSpend"> & { id?: string }) => Promise<Customer>;
   updateCustomer: (id: string, item: Partial<Customer>) => Promise<void>; deleteCustomer: (id: string) => Promise<void>;
   addEmployee: (item: Omit<Employee, "id">) => Promise<void>; updateEmployee: (id: string, item: Partial<Employee>) => Promise<void>; deleteEmployee: (id: string) => Promise<void>;
@@ -35,6 +39,7 @@ type ERPState = Snapshot & {
   addInvoice: (item: Omit<Invoice, "id" | "createdAt" | "invoiceNumber">) => Promise<void>; updateInvoice: (id: string, item: Partial<Invoice>) => Promise<void>; deleteInvoice: (id: string) => Promise<void>;
   addPayroll: (item: Omit<PayrollRun, "id">) => Promise<void>; updatePayroll: (id: string, item: Partial<PayrollRun>) => Promise<void>; deletePayroll: (id: string) => Promise<void>;
   updateSettings: (settings: SalonSettings) => Promise<void>;
+  setIdentity: (user: ERPUser, salon: ERPSalon | null) => void;
   markNotificationRead: (id: string) => Promise<void>;
 };
 
@@ -64,13 +69,20 @@ const message = (error: unknown) => error instanceof Error ? error.message : "Th
 
 export const useERPStore = create<ERPState>((set, get) => ({
   customers: [], employees: [], services: [], inventory: [], appointments: [], invoices: [], payroll: [], notifications: [], settings: emptySettings,
+  currentUser: null, currentSalon: null,
   loading: true, hydrated: false, error: null,
   clearError: () => set({ error: null }),
+  setIdentity: (user, salon) => set({ currentUser: user, currentSalon: salon }),
   hydrate: async () => {
     if (get().hydrated) return;
     set({ loading: true, error: null });
     try { set({ ...(await api<Snapshot>("/bootstrap")), loading: false, hydrated: true }); }
     catch (error) { set({ loading: false, error: message(error) }); }
+  },
+  refresh: async () => {
+    if (!get().hydrated) return;
+    try { set({ ...(await api<Snapshot>("/bootstrap")), error: null }); }
+    catch (error) { set({ error: message(error) }); }
   },
   addCustomer: async (input) => {
     try {
@@ -104,3 +116,5 @@ export const useERPStore = create<ERPState>((set, get) => ({
   updateSettings: async (settings) => { try { const item = await api<SalonSettings>("/settings", { method: "PUT", body: JSON.stringify(settings) }); set({ settings: item, error: null }); } catch (error) { set({ error: message(error) }); } },
   markNotificationRead: async (id) => { try { const item = await api<Notification>(`/notifications/${id}/read`, { method: "PATCH" }); set((state) => ({ notifications: replace(state.notifications, item), error: null })); } catch (error) { set({ error: message(error) }); } },
 }));
+
+

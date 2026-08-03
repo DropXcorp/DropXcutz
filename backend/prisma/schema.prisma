@@ -318,6 +318,7 @@ model User {
   name         String   @db.VarChar(160)
   email        String?   @unique @db.VarChar(200)
   passwordHash String
+  mustChangePassword Boolean @default(false)
   role         UserRole @default(SALON_ADMIN)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -358,6 +359,6 @@ model PlatformSettings {
   supportEmail          String?  @db.VarChar(200)
   defaultTrialDays      Int      @default(14)
   sessionHours          Int      @default(8)
-  passwordMinimumLength Int      @default(12)
+  passwordMinimumLength Int      @default(8)
   updatedAt             DateTime @updatedAt
 }

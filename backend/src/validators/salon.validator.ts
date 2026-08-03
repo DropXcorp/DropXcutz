@@ -159,7 +159,7 @@ export const settingsInput = z.object({
   allowOnlineBooking: z.boolean(),
   adminName: requiredText,
   adminEmail: z.string().trim().email().max(200),
-  adminPassword: z.string().min(12).max(200),
+  adminPassword: z.string().min(8).max(200),
   lowStockAlerts: z.boolean(),
   dailyRevenueDigest: z.boolean(),
 });

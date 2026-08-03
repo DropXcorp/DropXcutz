@@ -1,0 +1,1 @@
+ALTER TABLE "PlatformSettings" ALTER COLUMN "passwordMinimumLength" SET DEFAULT 8; UPDATE "PlatformSettings" SET "passwordMinimumLength" = 8 WHERE "passwordMinimumLength" < 8;

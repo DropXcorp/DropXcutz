@@ -3,9 +3,11 @@
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import AppSidebar from "./AppSidebar";
+import { useERPStore } from "@/src/lib/erp-store";
 
 export default function MobileSidebar() {
   const [open, setOpen] = useState(false);
+  const salon = useERPStore((state) => state.currentSalon);
 
   return (
     <>
@@ -42,7 +44,7 @@ export default function MobileSidebar() {
             {/* Branding */}
             <div>
               <h2 className="text-2xl font-bold text-zinc-900">
-                DropX Studio
+                {salon?.name ?? "Salon"}
               </h2>
 
               <p className="text-sm text-zinc-500">

@@ -11,7 +11,6 @@ import {
   Save,
   Scissors,
   Settings,
-  ShieldCheck,
   Trash2,
   UserCircle,
   UserCog,
@@ -31,8 +30,7 @@ type Module =
   | "loyalty"
   | "notifications"
   | "settings"
-  | "profile"
-  | "super-admin";
+  | "profile";
 const meta: Record<
   Module,
   { title: string; description: string; icon: typeof Users }
@@ -93,11 +91,6 @@ const meta: Record<
     description: "Salon administrator and company contact details.",
     icon: UserCircle,
   },
-  "super-admin": {
-    title: "Super Admin",
-    description: "Live company control center and operational overview.",
-    icon: ShieldCheck,
-  },
 };
 const input =
   "w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-900";
@@ -130,7 +123,6 @@ export default function ERPModuleClient({ module }: { module: Module }) {
       {module === "notifications" && <Notifications />}
       {module === "settings" && <SettingsForm />}
       {module === "profile" && <Profile />}
-      {module === "super-admin" && <SuperAdmin />}
     </div>
   );
 }
@@ -884,68 +876,5 @@ function SettingsEditor({ initial }: { initial: SalonSettings }) {
         Save all company settings
       </button>
     </form>
-  );
-}
-function SuperAdmin() {
-  const { settings, customers, employees, appointments, invoices, inventory } =
-    useERPStore();
-  const paidRevenue = invoices
-    .filter((invoice) => invoice.status === "Paid")
-    .reduce((sum, invoice) => sum + invoice.amount, 0);
-  const lowStock = inventory.filter((item) => item.stock <= item.reorderLevel);
-  return (
-    <>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[
-          ["Customers", customers.length],
-          ["Employees", employees.filter((item) => item.active).length],
-          ["Appointments", appointments.length],
-          ["Paid revenue", money(paidRevenue)],
-        ].map(([label, value]) => (
-          <div
-            key={String(label)}
-            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
-          >
-            <p className="text-sm text-zinc-500">{label}</p>
-            <p className="mt-2 text-2xl font-bold">{value}</p>
-          </div>
-        ))}
-      </div>
-      <Panel title="Live company profile">
-        <div className="grid gap-4 p-6 md:grid-cols-2">
-          <div>
-            <p className="text-xs uppercase text-zinc-500">Company</p>
-            <p className="mt-1 text-lg font-semibold">{settings.salonName}</p>
-            <p className="text-sm text-zinc-600">{settings.legalName}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-zinc-500">Super admin</p>
-            <p className="mt-1 text-lg font-semibold">{settings.adminName}</p>
-            <p className="text-sm text-zinc-600">{settings.adminEmail}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-zinc-500">Business settings</p>
-            <p className="mt-1 text-sm">
-              {settings.currency} · {settings.timezone} · {settings.taxRate}%
-              tax
-            </p>
-            <p className="text-sm text-zinc-600">
-              {settings.openingTime}–{settings.closingTime} ·{" "}
-              {settings.appointmentSlotMinutes}-minute slots
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-zinc-500">Alerts</p>
-            <p className="mt-1 text-sm">
-              {lowStock.length} low-stock item{lowStock.length === 1 ? "" : "s"}
-            </p>
-            <p className="text-sm text-zinc-600">
-              Online booking:{" "}
-              {settings.allowOnlineBooking ? "Enabled" : "Disabled"}
-            </p>
-          </div>
-        </div>
-      </Panel>
-    </>
   );
 }
