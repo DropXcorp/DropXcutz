@@ -10,6 +10,7 @@ export default function ERPBootstrap({
 }: {
   children: React.ReactNode;
 }) {
+  
   const { hydrate, loading, hydrated, error, clearError, setIdentity } =
     useERPStore();
   const [ready, setReady] = useState(false);
