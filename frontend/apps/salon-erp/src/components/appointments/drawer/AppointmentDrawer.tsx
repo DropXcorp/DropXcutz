@@ -20,7 +20,9 @@ interface AppointmentDrawerProps {
   mode?: "create" | "edit";
   appointment?: AppointmentTableItem | null;
   onClose: () => void;
-  onSave: (data: AppointmentFormData) => void;
+  onSave: (data: AppointmentFormData) => Promise<void> | void;
+  availableServices?: ServiceItem[];
+  availableEmployees?: EmployeeItem[];
 }
 
 export interface ServiceItem {
@@ -30,11 +32,19 @@ export interface ServiceItem {
   durationMinutes: number;
 }
 
+export interface EmployeeItem {
+  id: string;
+  name: string;
+  role?: string;
+  active?: boolean;
+}
+
 export interface AppointmentFormData {
   customerName: string;
   customerPhone: string;
   date: string;
   time: string;
+  stylistId: string;
   services: ServiceItem[];
   applyDiscount: boolean;
   applyLoyaltyPoints: boolean;
@@ -44,13 +54,7 @@ export interface AppointmentFormData {
   totalAmount: number;
 }
 
-const AVAILABLE_SERVICES: ServiceItem[] = [
-  { id: "s1", name: "Haircut & Styling", price: 600, durationMinutes: 45 },
-  { id: "s2", name: "Hair Coloring", price: 2500, durationMinutes: 90 },
-  { id: "s3", name: "Beard Trim", price: 300, durationMinutes: 20 },
-  { id: "s4", name: "Facial Treatment", price: 1500, durationMinutes: 60 },
-  { id: "s5", name: "Head Massage", price: 500, durationMinutes: 30 },
-];
+const DEFAULT_SERVICES: ServiceItem[] = [];
 
 export default function AppointmentDrawer({
   open,
@@ -58,6 +62,8 @@ export default function AppointmentDrawer({
   appointment,
   onClose,
   onSave,
+  availableServices = DEFAULT_SERVICES,
+  availableEmployees = [],
 }: AppointmentDrawerProps) {
   useEffect(() => {
     if (!open) return;
@@ -77,6 +83,8 @@ export default function AppointmentDrawer({
       appointment={appointment}
       onClose={onClose}
       onSave={onSave}
+      availableServices={availableServices}
+      availableEmployees={availableEmployees}
     />
   );
 }
@@ -86,10 +94,13 @@ function AppointmentForm({
   appointment,
   onClose,
   onSave,
+  availableServices = DEFAULT_SERVICES,
+  availableEmployees = [],
 }: Omit<AppointmentDrawerProps, "open">) {
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<AppointmentFormData>(() => {
     const services = appointment?.services.map((service) => {
-      const knownService = AVAILABLE_SERVICES.find((item) => item.name === service.name);
+      const knownService = availableServices.find((item) => item.id === service.id || item.name === service.name);
       return knownService ?? { id: service.id, name: service.name, price: 500, durationMinutes: 30 };
     }) ?? [];
 
@@ -99,6 +110,7 @@ function AppointmentForm({
     date: new Date().toISOString().split("T")[0],
     time: "10:00",
     services: [],
+    stylistId: appointment?.stylist.id ?? availableEmployees.find((employee) => employee.active)?.id ?? "unassigned",
     applyDiscount: false,
     applyLoyaltyPoints: false,
     subtotal: 0,
@@ -108,9 +120,11 @@ function AppointmentForm({
       ...(appointment
         ? {
             customerName: appointment.customer.name,
+            customerPhone: appointment.customer.phone ?? "",
             date: toInputDate(appointment.schedule.date),
             time: toInputTime(appointment.schedule.time),
             services,
+            stylistId: appointment.stylist.id,
           }
         : {}),
     };
@@ -122,7 +136,7 @@ function AppointmentForm({
   const totalAmount = Math.max(0, subtotal - discountAmount - loyaltyAmount);
 
   const handleAddService = (serviceId: string) => {
-    const serviceToAdd = AVAILABLE_SERVICES.find((s) => s.id === serviceId);
+    const serviceToAdd = availableServices.find((s) => s.id === serviceId);
     if (serviceToAdd && !formData.services.some((s) => s.id === serviceId)) {
       setFormData((prev) => ({
         ...prev,
@@ -138,9 +152,15 @@ function AppointmentForm({
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ ...formData, subtotal, discountAmount, loyaltyAmount, totalAmount });
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSave({ ...formData, subtotal, discountAmount, loyaltyAmount, totalAmount });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -221,6 +241,20 @@ function AppointmentForm({
               </div>
             </div>
 
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-zinc-700">Assigned Stylist</label>
+              <select
+                value={formData.stylistId}
+                onChange={(e) => setFormData({ ...formData, stylistId: e.target.value })}
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-900"
+              >
+                <option value="unassigned">Unassigned</option>
+                {availableEmployees.filter((employee) => employee.active !== false).map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.name}{employee.role ? ` (${employee.role})` : ""}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Services Selection Section */}
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -237,7 +271,7 @@ function AppointmentForm({
                   className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 outline-none hover:bg-zinc-100"
                 >
                   <option value="">+ Add Service</option>
-                  {AVAILABLE_SERVICES.filter(
+                  {availableServices.filter(
                     (s) => !formData.services.some((selected) => selected.id === s.id)
                   ).map((service) => (
                     <option key={service.id} value={service.id}>
@@ -382,11 +416,11 @@ function AppointmentForm({
 
             <button
               type="submit"
-              disabled={formData.services.length === 0}
+              disabled={formData.services.length === 0 || saving}
               className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50"
             >
-              <Save className="h-4 w-4" />
-              {mode === "create" ? "Create Appointment" : "Save Changes"}
+              <Save className={`h-4 w-4 ${saving ? "animate-pulse" : ""}`} />
+              {saving ? "Saving..." : mode === "create" ? "Create Appointment" : "Save Changes"}
             </button>
           </div>
         </form>

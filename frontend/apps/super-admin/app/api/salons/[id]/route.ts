@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 
 const backend = process.env.SALON_BACKEND_URL ?? "http://localhost:5000/api";
 
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const response = await fetch(`${backend}/platform/salons/${encodeURIComponent(id)}`, {
+    headers: { "content-type": "application/json", cookie: request.headers.get("cookie") ?? "" },
+  });
+  return new NextResponse(await response.text(), { status: response.status, headers: { "content-type": "application/json" } });
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const response = await fetch(`${backend}/platform/salons/${encodeURIComponent(id)}`, {
@@ -11,3 +19,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
   return new NextResponse(await response.text(), { status: response.status, headers: { "content-type": "application/json" } });
 }
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const response = await fetch(`${backend}/platform/salons/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { cookie: request.headers.get("cookie") ?? "" },
+  });
+  return new NextResponse(await response.text(), { status: response.status, headers: { "content-type": "application/json" } });
+}
+

@@ -102,6 +102,13 @@ packageRouter.patch("/:id", requireSalonAdmin, async (req, res) => {
   );
 });
 
+packageRouter.delete("/:id", requireSalonAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  await get(salonId(res), id);
+  await prisma.package.delete({ where: { id } });
+  res.status(204).end();
+});
+
 
 packageRouter.post("/:id/services", requireSalonAdmin, async (req, res) => {
   const input = packageServiceInput.parse(req.body);

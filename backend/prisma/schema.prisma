@@ -533,6 +533,7 @@ model Supplier {
   id             String          @id @default(cuid())
   salonId        String
   name           String          @db.VarChar(160)
+  contactPerson  String?         @db.VarChar(160)
   phone          String?         @db.VarChar(30)
   email          String?         @db.VarChar(200)
   gstNumber      String?         @db.VarChar(20)

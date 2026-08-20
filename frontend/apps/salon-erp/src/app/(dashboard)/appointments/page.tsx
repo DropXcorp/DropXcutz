@@ -12,6 +12,8 @@ import AppointmentTable, {
 import AppointmentToolbar from "@/src/components/appointments/AppointmentToolbar";
 import AppointmentDrawer, {
   AppointmentFormData,
+  ServiceItem,
+  EmployeeItem,
 } from "@/src/components/appointments/drawer/AppointmentDrawer";
 import { useERPStore } from "@/src/lib/erp-store";
 
@@ -34,6 +36,8 @@ export default function AppointmentsPage() {
     customers,
     saveAppointment: persistAppointment,
     addCustomer,
+    services: catalogServices,
+    refresh,
   } = useERPStore();
   const [search, setSearch] = useState("");
   const [employee, setEmployee] = useState("all");
@@ -86,7 +90,7 @@ export default function AppointmentsPage() {
   const overview = useMemo(
     () => ({
       totalAppointments: appointments.length,
-      totalTrend: "+12%",
+      totalTrend: "—",
       walkInAppointments: appointments.filter(
         (item) => item.appointment.source === "Walk-in",
       ).length,
@@ -99,7 +103,7 @@ export default function AppointmentsPage() {
         appointments.reduce((sum, item) => sum + item.payment.amount, 0) /
           Math.max(appointments.length, 1),
       ),
-      revenueTrend: "+8%",
+      revenueTrend: "—",
     }),
     [appointments],
   );
@@ -113,12 +117,17 @@ export default function AppointmentsPage() {
     if (selectedAppointment) {
       await persistAppointment({
         ...selectedAppointment,
-        customer: { ...selectedAppointment.customer, name: data.customerName },
+        customer: { ...selectedAppointment.customer, name: data.customerName, phone: data.customerPhone },
         services,
         schedule: {
           date: data.date,
           time: formatTime(data.time),
           duration: `${duration} mins`,
+        },
+        stylist: {
+          id: data.stylistId || "unassigned",
+          name: employees.find((employee) => employee.id === data.stylistId)?.name ?? "Unassigned",
+          designation: employees.find((employee) => employee.id === data.stylistId)?.role ?? "",
         },
         payment: {
           amount: data.totalAmount,
@@ -137,7 +146,7 @@ export default function AppointmentsPage() {
           phone: data.customerPhone,
           membership: "Standard",
         });
-      const stylist = employees.find((item) => item.active) ?? {
+      const stylist = employees.find((item) => item.id === data.stylistId) ?? employees.find((item) => item.active) ?? {
         id: "unassigned",
         name: "Unassigned",
         role: "",
@@ -147,6 +156,7 @@ export default function AppointmentsPage() {
         customer: {
           id: customer.id,
           name: data.customerName,
+          phone: data.customerPhone,
           membership: customer.membership,
         },
         appointment: { appointmentNumber: "", source: "Walk-in" },
@@ -167,6 +177,13 @@ export default function AppointmentsPage() {
     }
     setDrawerOpen(false);
     setSelectedAppointment(null);
+  };
+
+  const updateAppointmentStatus = async (
+    appointment: AppointmentTableItem,
+    status: AppointmentTableItem["status"],
+  ) => {
+    await persistAppointment({ ...appointment, status });
   };
 
   const handleExport = (type: ExportType) => {
@@ -205,7 +222,7 @@ export default function AppointmentsPage() {
         refreshing={refreshing}
         onRefresh={() => {
           setRefreshing(true);
-          window.setTimeout(() => setRefreshing(false), 500);
+          void refresh().finally(() => setRefreshing(false));
         }}
         onNewAppointment={() => {
           setSelectedAppointment(null);
@@ -270,6 +287,14 @@ export default function AppointmentsPage() {
           setSelectedAppointment(null);
           setDrawerOpen(true);
         }}
+        onAssign={(item) => {
+          setSelectedAppointment(item);
+          setDrawerOpen(true);
+        }}
+        onCheckIn={(item) => void updateAppointmentStatus(item, "Checked In")}
+        onStart={(item) => void updateAppointmentStatus(item, "In Progress")}
+        onComplete={(item) => void updateAppointmentStatus(item, "Completed")}
+        onCancel={(item) => void updateAppointmentStatus(item, "Cancelled")}
       />
       <AppointmentDrawer
         open={drawerOpen}
@@ -280,6 +305,18 @@ export default function AppointmentsPage() {
           setSelectedAppointment(null);
         }}
         onSave={saveAppointment}
+        availableServices={catalogServices.map((service): ServiceItem => ({
+          id: service.id,
+          name: service.name,
+          price: service.price,
+          durationMinutes: service.durationMinutes,
+        }))}
+        availableEmployees={employees.map((employee): EmployeeItem => ({
+          id: employee.id,
+          name: employee.name,
+          role: employee.role,
+          active: employee.active,
+        }))}
       />
     </div>
   );

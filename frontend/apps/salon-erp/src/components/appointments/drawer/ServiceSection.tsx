@@ -17,39 +17,12 @@ interface Service {
   price: number;
 }
 
-const availableServices: Service[] = [
-  {
-    id: "1",
-    name: "Hair Cut",
-    duration: 45,
-    price: 350,
-  },
-  {
-    id: "2",
-    name: "Beard Trim",
-    duration: 15,
-    price: 200,
-  },
-  {
-    id: "3",
-    name: "Hair Spa",
-    duration: 60,
-    price: 900,
-  },
-  {
-    id: "4",
-    name: "Facial",
-    duration: 75,
-    price: 1200,
-  },
-];
+const availableServices: Service[] = [];
 
 export default function ServiceSection() {
   const [search, setSearch] = useState("");
 
-  const [selectedServices, setSelectedServices] = useState<Service[]>([
-    availableServices[0],
-  ]);
+  const [selectedServices, setSelectedServices] = useState<Service[]>([]);
 
   const filteredServices = availableServices.filter((service) =>
     service.name.toLowerCase().includes(search.toLowerCase())

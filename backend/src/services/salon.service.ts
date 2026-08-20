@@ -229,6 +229,7 @@ export const appointmentDto = (item: any) => ({
   customer: {
     id: item.customer.id,
     name: item.customer.name,
+    phone: item.customer.phone ?? "",
     membership:
       membershipToUi[item.customer.membership as keyof typeof membershipToUi],
   },
@@ -447,7 +448,7 @@ export async function saveAppointment(
   const saved = await prisma.$transaction(async (client) => {
     await client.customer.update({
       where: { id: input.customer.id },
-      data: { name: input.customer.name },
+      data: { name: input.customer.name, ...(input.customer.phone ? { phone: input.customer.phone } : {}) },
     });
     const data = {
       customerId: input.customer.id,
@@ -499,8 +500,8 @@ export async function createInvoice(salonId: string, input: any) {
   await assertOwned("customer", input.customerId, salonId);
   if (input.appointmentId)
     await assertOwned("appointment", input.appointmentId, salonId);
-  const invoice = await prisma.$transaction(async (client) =>
-    client.invoice.create({
+  const invoice = await prisma.$transaction(async (client) => {
+    const created = await client.invoice.create({
       data: {
         salonId,
         invoiceNumber: await nextInvoiceNumber(client, salonId),
@@ -514,8 +515,15 @@ export async function createInvoice(salonId: string, input: any) {
           paymentStatusToDb[input.status as keyof typeof paymentStatusToDb],
         notes: input.notes || null,
       },
-    }),
-  );
+    });
+    if (input.appointmentId) {
+      await client.appointment.update({
+        where: { id: input.appointmentId },
+        data: { amountPaid: input.status === "Paid" ? input.amount : 0, paymentStatus: paymentStatusToDb[input.status as keyof typeof paymentStatusToDb] },
+      });
+    }
+    return created;
+  });
   return invoiceDto(invoice);
 }
 

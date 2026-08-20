@@ -2,32 +2,61 @@ import { motion } from "framer-motion";
 import {
   Activity,
   ArrowUpRight,
+  BarChart3,
   Bell,
   Building2,
+  Calendar,
   CalendarDays,
   Check,
   CircleDollarSign,
+  Clock,
+  CreditCard,
+  Edit2,
+  Eye,
   FileClock,
+  KeyRound,
   LayoutDashboard,
+  Lock,
+  Mail,
+  MoreVertical,
+  Phone,
   Plus,
+  RefreshCw,
   Search,
+  Settings,
+  ShieldAlert,
   ShieldCheck,
+  LogOut,
+  Trash2,
+  TrendingUp,
+  UserCheck,
+  UserPlus,
   Users,
+  UserX,
   X,
+  Zap,
 } from "lucide-react";
+import React, { useState } from "react";
+
 export type Status = "TRIAL" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+
 export type Salon = {
   id: string;
   code: string;
   salonName: string;
+  legalName?: string | null;
+  phone?: string | null;
   email: string;
   city: string | null;
+  state?: string | null;
   status: Status;
   subscriptionPlan: string;
+  trialEndsAt?: string | null;
   createdAt: string;
   paidRevenue: number;
-  _count: { customers: number; appointments: number };
+  _count: { customers: number; appointments: number; employees?: number };
 };
+
 export type Subscription = {
   id: string;
   salonName: string;
@@ -36,7 +65,9 @@ export type Subscription = {
   status: Status;
   trialEndsAt: string | null;
   createdAt: string;
+  _count?: { appointments: number; customers: number; employees: number };
 };
+
 export type PlatformUser = {
   id: string;
   name: string;
@@ -44,15 +75,20 @@ export type PlatformUser = {
   role: string;
   active: boolean;
   createdAt: string;
-  salon: { salonName: string } | null;
+  salon: { id: string; salonName: string; code: string } | null;
 };
+
 export type AuditItem = {
   id: string;
+  actorId: string | null;
+  actor?: { name: string; email: string };
   action: string;
   entity: string;
   entityId: string | null;
+  details?: Record<string, any> | null;
   createdAt: string;
 };
+
 export type SettingsData = {
   platformName: string;
   supportEmail: string | null;
@@ -60,6 +96,24 @@ export type SettingsData = {
   sessionHours: number;
   passwordMinimumLength: number;
 };
+
+export type OverviewMetrics = {
+  totalSalons: number;
+  activeSalons: number;
+  trialSalons: number;
+  suspendedSalons: number;
+  totalUsers: number;
+  totalCustomers: number;
+  totalAppointments: number;
+  totalRevenue: number;
+};
+
+export type OverviewData = {
+  metrics: OverviewMetrics;
+  salons: Salon[];
+  recentAudit: AuditItem[];
+};
+
 export type Section =
   | "Overview"
   | "Salons"
@@ -69,41 +123,48 @@ export type Section =
   | "Settings"
   | "Notifications"
   | "Financials";
+
 export const inputClass =
   "w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-4 focus:ring-zinc-500/10";
+
 export const buttonClass =
   "inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-700 disabled:opacity-60";
-const money = (v: number) =>
+
+export const money = (v: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(v);
-const date = (v: string | null) =>
+  }).format(v || 0);
+
+export const date = (v: string | null | undefined) =>
   v
     ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(
         new Date(v),
       )
     : "Not set";
-const tones: Record<Status, string> = {
+
+export const tones: Record<Status, string> = {
   ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
   TRIAL: "border-amber-200 bg-amber-50 text-amber-700",
   SUSPENDED: "border-rose-200 bg-rose-50 text-rose-700",
   ARCHIVED: "border-zinc-200 bg-zinc-100 text-zinc-700",
 };
+
 export function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-900 text-white">
+      <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-900 text-white shadow-md">
         <span className="text-lg font-bold">DX</span>
       </div>
       <div>
-        <b>DropXCutz</b>
-        <p className="text-xs text-zinc-500">Super admin</p>
+        <b className="text-base text-zinc-950 font-bold">DropXCutz</b>
+        <p className="text-xs text-zinc-500 font-medium">Super Admin Platform</p>
       </div>
     </div>
   );
 }
+
 export function Navigation({
   items,
   section,
@@ -116,7 +177,7 @@ export function Navigation({
   return (
     <nav className="flex-1 space-y-1 px-3 py-5">
       <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-widest text-zinc-400">
-        Manage
+        Platform Control
       </p>
       {items.map(([Icon, label]) => (
         <motion.button
@@ -124,32 +185,40 @@ export function Navigation({
           onClick={() => choose(label)}
           whileHover={{ x: 3 }}
           whileTap={{ scale: 0.98 }}
-          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${section === label ? "bg-zinc-950 text-white" : "text-zinc-700 hover:bg-zinc-50"}`}
+          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+            section === label
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-700 hover:bg-zinc-100"
+          }`}
         >
           <Icon className="h-[18px] w-[18px]" />
           {label}
           {section === label && (
-            <i className="ml-auto h-1.5 w-1.5 rounded-full bg-zinc-900" />
+            <i className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
           )}
         </motion.button>
       ))}
     </nav>
   );
 }
-export function SidebarFooter() {
+
+export function SidebarFooter({ onLogout }: { onLogout: () => void }) {
   return (
-    <div className="m-3 flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+    <div className="m-3 flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 shadow-sm">
       <b className="grid h-9 w-9 place-items-center rounded-full bg-zinc-900 text-xs text-white">
         SA
       </b>
       <div>
-        <p className="text-sm font-semibold">Super Admin</p>
-        <p className="text-xs text-zinc-500">Platform access</p>
+        <p className="text-sm font-bold text-zinc-900">Platform Admin</p>
+        <p className="text-xs text-zinc-500">Root authorization</p>
       </div>
-      <ShieldCheck className="ml-auto h-4 w-4 text-emerald-600" />
+      <button type="button" onClick={onLogout} title="Log out" className="ml-auto rounded-lg p-2 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-950">
+        <LogOut className="h-4 w-4" />
+      </button>
     </div>
   );
 }
+
 export function SectionHeading({
   title,
   subtitle,
@@ -159,23 +228,25 @@ export function SectionHeading({
 }) {
   return (
     <div>
-      <h2 className="text-2xl font-bold tracking-tight sm:text-[28px]">
+      <h2 className="text-2xl font-bold tracking-tight text-zinc-950 sm:text-[28px]">
         {title}
       </h2>
       <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
     </div>
   );
 }
+
 export function FullPageLoader() {
   return (
     <main className="grid min-h-screen place-items-center bg-zinc-50">
       <div className="text-center">
-        <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-zinc-100 border-t-zinc-600" />
-        <p className="mt-4 text-sm text-zinc-500">Loading your workspace?</p>
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900" />
+        <p className="mt-4 text-sm font-semibold text-zinc-600">Connecting to platform...</p>
       </div>
     </main>
   );
 }
+
 export function Notice({
   message,
   type,
@@ -189,17 +260,22 @@ export function Notice({
   return (
     <div
       role="alert"
-      className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}
+      className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-sm ${
+        ok
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : "border-rose-200 bg-rose-50 text-rose-800"
+      }`}
     >
-      {ok ? <Check className="h-4 w-4" /> : <Activity className="h-4 w-4" />}
-      <span className="flex-1">{message}</span>
-      <button onClick={onClose}>
+      {ok ? <Check className="h-4 w-4 shrink-0 text-emerald-600" /> : <Activity className="h-4 w-4 shrink-0 text-rose-600" />}
+      <span className="flex-1 font-medium">{message}</span>
+      <button onClick={onClose} className="p-1 hover:opacity-70">
         <X className="h-4 w-4" />
       </button>
     </div>
   );
 }
-function Field({
+
+export function Field({
   label,
   hint,
   children,
@@ -210,13 +286,14 @@ function Field({
 }) {
   return (
     <label className="block">
-      <b className="mb-2 block text-sm text-zinc-700">{label}</b>
+      <b className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-600">{label}</b>
       {children}
-      {hint && <small className="mt-1 block text-zinc-400">{hint}</small>}
+      {hint && <small className="mt-1 block text-xs text-zinc-400">{hint}</small>}
     </label>
   );
 }
-function Input({
+
+export function Input({
   label,
   hint,
   ...p
@@ -226,11 +303,12 @@ function Input({
 }) {
   return (
     <Field label={label} hint={hint}>
-      <input required className={inputClass} {...p} />
+      <input className={inputClass} {...p} />
     </Field>
   );
 }
-function Panel({
+
+export function Panel({
   title,
   subtitle,
   action,
@@ -243,10 +321,10 @@ function Panel({
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <header className="flex justify-between border-b border-zinc-100 px-5 py-4 sm:px-6">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 px-5 py-4 sm:px-6">
         <div>
-          <h3 className="font-bold">{title}</h3>
-          <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+          <h3 className="font-bold text-zinc-950 text-base">{title}</h3>
+          <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>
         </div>
         {action}
       </header>
@@ -254,31 +332,38 @@ function Panel({
     </section>
   );
 }
-function Avatar({ name, round = false }: { name: string; round?: boolean }) {
-  const s = name
+
+export function Avatar({ name, round = false }: { name: string; round?: boolean }) {
+  const s = (name || "Salon")
     .split(" ")
     .slice(0, 2)
     .map((x) => x[0])
-    .join("");
+    .join("")
+    .toUpperCase();
   return (
     <b
-      className={`grid h-10 w-10 shrink-0 place-items-center bg-zinc-50 text-sm text-zinc-700 ${round ? "rounded-full" : "rounded-xl"}`}
+      className={`grid h-10 w-10 shrink-0 place-items-center bg-zinc-100 text-xs font-bold text-zinc-800 ${
+        round ? "rounded-full" : "rounded-xl"
+      }`}
     >
       {s}
     </b>
   );
 }
-function Status({ value }: { value?: Status }) {
+
+export function StatusBadge({ value }: { value?: Status }) {
   const safe = value && value in tones ? value : "ARCHIVED";
   return (
     <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${tones[safe]}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${tones[safe]}`}
     >
-      {safe.charAt(0) + safe.slice(1).toLowerCase()}
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {safe}
     </span>
   );
 }
-function Empty({
+
+export function Empty({
   title,
   message,
   action,
@@ -290,15 +375,16 @@ function Empty({
   return (
     <div className="grid min-h-56 place-items-center p-8 text-center">
       <div>
-        <Search className="mx-auto h-6 w-6 text-zinc-300" />
-        <b className="mt-4 block">{title}</b>
+        <Search className="mx-auto h-8 w-8 text-zinc-300" />
+        <b className="mt-4 block font-bold text-zinc-800">{title}</b>
         <p className="mt-1 text-sm text-zinc-500">{message}</p>
         {action && <div className="mt-5">{action}</div>}
       </div>
     </div>
   );
 }
-function Table({
+
+export function Table({
   head,
   loading,
   empty,
@@ -311,9 +397,9 @@ function Table({
 }) {
   if (loading)
     return (
-      <div className="animate-pulse p-6">
+      <div className="animate-pulse p-6 space-y-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="mb-4 h-12 rounded-xl bg-zinc-100" />
+          <div key={i} className="h-12 rounded-xl bg-zinc-100" />
         ))}
       </div>
     );
@@ -321,7 +407,7 @@ function Table({
   return (
     <div className="overflow-x-auto">
       <table className="admin-table min-w-full text-left text-sm">
-        <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
+        <thead className="bg-zinc-50/75 text-[11px] font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100">
           <tr>
             {head.map((x) => (
               <th key={x} className="px-5 py-3.5">
@@ -335,6 +421,7 @@ function Table({
     </div>
   );
 }
+
 export function SignIn({
   error,
   submitting,
@@ -348,21 +435,21 @@ export function SignIn({
 }) {
   return (
     <main className="relative grid min-h-screen place-items-center overflow-hidden bg-zinc-950 p-5">
-      <div className="absolute h-[520px] w-[520px] rounded-full bg-zinc-900/25 blur-3xl" />
+      <div className="absolute h-[520px] w-[520px] rounded-full bg-zinc-900/40 blur-3xl" />
       <motion.form
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
         onSubmit={onSubmit}
         onChange={clearError}
-        className="relative w-full max-w-[440px] rounded-3xl bg-white p-8 shadow-2xl"
+        className="relative w-full max-w-[440px] rounded-3xl bg-white p-8 shadow-2xl border border-zinc-100"
       >
         <Brand />
         <div className="mt-9">
-          <p className="text-sm font-semibold text-zinc-700">Welcome back</p>
-          <h1 className="mt-1 text-3xl font-bold">Sign in to your workspace</h1>
+          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Control Plane</p>
+          <h1 className="mt-1 text-2xl font-bold text-zinc-950">Platform Admin Sign In</h1>
           <p className="mt-2 text-sm text-zinc-500">
-            Use your platform administrator credentials to continue.
+            Enter platform credentials to manage all salon workspaces.
           </p>
         </div>
         {error && (
@@ -371,141 +458,201 @@ export function SignIn({
           </div>
         )}
         <div className="mt-6 space-y-4">
-          <Field label="Email address">
+          <Field label="Platform Email">
             <input
               required
               name="email"
               type="email"
               autoComplete="email"
+              placeholder="admin@dropxcutz.com"
               className={inputClass}
             />
           </Field>
-          <Field label="Password">
+          <Field label="Master Password">
             <input
               required
               name="password"
               type="password"
               autoComplete="current-password"
+              placeholder="••••••••"
               className={inputClass}
             />
           </Field>
-          <button disabled={submitting} className={`${buttonClass} w-full`}>
-            {submitting ? "Signing in..." : "Sign in"}
+          <button disabled={submitting} className={`${buttonClass} w-full py-3 mt-2`}>
+            {submitting ? "Authenticating..." : "Sign In to Platform"}
           </button>
         </div>
       </motion.form>
     </main>
   );
 }
+
+// -------------------------------------------------------------
+// 1. OVERVIEW VIEW (Live Metrics + Health + Salons)
+// -------------------------------------------------------------
 export function Overview({
-  salons,
-  active,
-  appointments,
-  revenue,
+  overview,
   onViewSalons,
+  onUpdateStatus,
 }: {
-  salons: Salon[];
-  active: number;
-  appointments: number;
-  revenue: number;
+  overview: OverviewData | null;
   onViewSalons: () => void;
+  onUpdateStatus: (salonId: string, status: Status) => void;
 }) {
-  const customers = salons.reduce((n, s) => n + s._count.customers, 0),
-    rate = salons.length ? Math.round((active / salons.length) * 100) : 0;
+  const metrics = overview?.metrics ?? {
+    totalSalons: 0,
+    activeSalons: 0,
+    trialSalons: 0,
+    suspendedSalons: 0,
+    totalUsers: 0,
+    totalCustomers: 0,
+    totalAppointments: 0,
+    totalRevenue: 0,
+  };
+
+  const salons = overview?.salons ?? [];
+  const rate = metrics.totalSalons ? Math.round((metrics.activeSalons / metrics.totalSalons) * 100) : 0;
+
   const cards = [
-    [Building2, "Total salons", salons.length],
-    [Users, "Total customers", customers],
-    [CalendarDays, "Appointments", appointments],
-    [CircleDollarSign, "Platform revenue", money(revenue)],
+    [Building2, "Total Salons", metrics.totalSalons, `${metrics.activeSalons} Active, ${metrics.trialSalons} Trial`],
+    [CircleDollarSign, "Platform Revenue", money(metrics.totalRevenue), "Gross collected across all salons"],
+    [Users, "Total Customers", metrics.totalCustomers, "Registered platform clients"],
+    [CalendarDays, "Appointments", metrics.totalAppointments, "Total recorded bookings"],
   ] as const;
+
   return (
-    <>
+    <div className="space-y-6">
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(([Icon, label, value]) => (
+        {cards.map(([Icon, label, value, sub]) => (
           <div
             key={label}
-            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
+            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm hover:shadow transition"
           >
-            <div className="flex justify-between">
-              <div className="metric-icon">
+            <div className="flex justify-between items-start">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 text-zinc-900">
                 <Icon className="h-5 w-5" />
               </div>
               <ArrowUpRight className="h-4 w-4 text-zinc-300" />
             </div>
-            <p className="mt-5 text-sm text-zinc-500">{label}</p>
-            <p className="mt-1 text-2xl font-bold">{value}</p>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-950">{value}</p>
+            <p className="mt-1 text-xs text-zinc-500">{sub}</p>
           </div>
         ))}
       </section>
+
       <section className="grid gap-6 xl:grid-cols-[1.6fr_.8fr]">
         <Panel
-          title="Recent salons"
-          subtitle="Latest workspaces added"
+          title="Recent Salon Workspaces"
+          subtitle="Latest salon accounts on the platform"
           action={
             <button
               onClick={onViewSalons}
-              className="text-sm font-semibold text-zinc-700"
+              className="text-xs font-bold uppercase tracking-wider text-zinc-900 hover:underline"
             >
-              View all
+              View all ({metrics.totalSalons})
             </button>
           }
         >
           <div className="divide-y divide-zinc-100">
-            {salons.slice(0, 5).map((s) => (
-              <div key={s.id} className="flex items-center gap-3 px-5 py-4">
-                <Avatar name={s.salonName} />
-                <div className="min-w-0 flex-1">
-                  <b className="text-sm">{s.salonName}</b>
-                  <p className="text-xs text-zinc-500">
-                    {s.code} ? {s.city || "Location pending"}
-                  </p>
+            {salons.slice(0, 6).map((s) => (
+              <div key={s.id} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-zinc-50/50 transition">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar name={s.salonName} />
+                  <div className="min-w-0 flex-1">
+                    <b className="text-sm text-zinc-900 block truncate">{s.salonName}</b>
+                    <p className="text-xs text-zinc-500">
+                      <span className="font-mono text-zinc-700">{s.code}</span> • {s.city || "Location pending"} • {s.subscriptionPlan}
+                    </p>
+                  </div>
                 </div>
-                <Status value={s.status} />
+                <div className="flex items-center gap-3">
+                  <StatusBadge value={s.status} />
+                  <div className="flex gap-1">
+                    {s.status !== "ACTIVE" && (
+                      <button
+                        onClick={() => onUpdateStatus(s.id, "ACTIVE")}
+                        className="rounded-lg border border-emerald-200 bg-emerald-50 p-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                        title="Activate Salon"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {s.status !== "SUSPENDED" && (
+                      <button
+                        onClick={() => onUpdateStatus(s.id, "SUSPENDED")}
+                        className="rounded-lg border border-rose-200 bg-rose-50 p-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                        title="Suspend Salon"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
             {!salons.length && (
               <Empty
-                title="No salons yet"
-                message="Add your first salon to begin."
+                title="No salon workspaces"
+                message="Add your first salon using the 'Add Salon' button above."
               />
             )}
           </div>
         </Panel>
-        <Panel title="Platform health" subtitle="Account status at a glance">
+
+        <Panel title="Platform Health & Capacity" subtitle="Account status distribution">
           <div className="p-6">
-            <p className="text-3xl font-bold">{rate}%</p>
-            <p className="text-sm text-zinc-500">Active workspace rate</p>
-            <div className="mt-5 h-2 rounded-full bg-zinc-100">
+            <div className="flex items-baseline justify-between">
+              <div>
+                <p className="text-3xl font-bold text-zinc-950">{rate}%</p>
+                <p className="text-xs text-zinc-500">Active Workspaces Ratio</p>
+              </div>
+              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
+                {metrics.activeSalons} of {metrics.totalSalons} Active
+              </span>
+            </div>
+            <div className="mt-4 h-2.5 rounded-full bg-zinc-100 overflow-hidden">
               <div
-                className="h-2 rounded-full bg-emerald-500"
+                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
                 style={{ width: `${rate}%` }}
               />
             </div>
-            <div className="mt-6 space-y-3">
-              <Health label="Active" value={active} />
-              <Health
-                label="On trial"
-                value={salons.filter((s) => s.status === "TRIAL").length}
-              />
-              <Health
-                label="Needs attention"
-                value={salons.filter((s) => s.status === "SUSPENDED").length}
-              />
+            <div className="mt-6 space-y-2.5">
+              <div className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 text-sm">
+                <span className="text-zinc-600 font-medium flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Active
+                </span>
+                <b className="text-zinc-950 font-bold">{metrics.activeSalons}</b>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 text-sm">
+                <span className="text-zinc-600 font-medium flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" /> On Trial
+                </span>
+                <b className="text-zinc-950 font-bold">{metrics.trialSalons}</b>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 text-sm">
+                <span className="text-zinc-600 font-medium flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-rose-500" /> Suspended
+                </span>
+                <b className="text-zinc-950 font-bold">{metrics.suspendedSalons}</b>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 text-sm">
+                <span className="text-zinc-600 font-medium flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-zinc-400" /> Total Users
+                </span>
+                <b className="text-zinc-950 font-bold">{metrics.totalUsers}</b>
+              </div>
             </div>
           </div>
         </Panel>
       </section>
-    </>
-  );
-}
-function Health({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex rounded-xl bg-zinc-50 p-3 text-sm">
-      <span className="flex-1 text-zinc-700">{label}</span>
-      <b>{value}</b>
     </div>
   );
 }
+
+// -------------------------------------------------------------
+// 2. SALONS VIEW (Full Management & Actions)
+// -------------------------------------------------------------
 export function SalonsView({
   salons,
   total,
@@ -513,6 +660,10 @@ export function SalonsView({
   search,
   setSearch,
   onCreate,
+  onEdit,
+  onUpdateStatus,
+  onDelete,
+  onViewDetails,
 }: {
   salons: Salon[];
   total: number;
@@ -520,77 +671,153 @@ export function SalonsView({
   search: string;
   setSearch: (s: string) => void;
   onCreate: () => void;
+  onEdit: (salon: Salon) => void;
+  onUpdateStatus: (salonId: string, status: Status) => void;
+  onDelete: (salon: Salon) => void;
+  onViewDetails: (salon: Salon) => void;
 }) {
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  const filtered = salons.filter((s) => {
+    if (statusFilter !== "ALL" && s.status !== statusFilter) return false;
+    return true;
+  });
+
   return (
     <Panel
-      title="Salon directory"
-      subtitle={`${total} workspaces on the platform`}
+      title="Salon Workspaces Directory"
+      subtitle={`${total} salons configured across platform`}
+      action={
+        <button onClick={onCreate} className={buttonClass}>
+          <Plus className="h-4 w-4" /> Add Salon
+        </button>
+      }
     >
-      <div className="border-b border-zinc-100 p-4 sm:px-6">
-        <label className="relative block max-w-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 p-4 sm:px-6 bg-zinc-50/50">
+        <label className="relative block max-w-sm flex-1 min-w-[240px]">
           <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, code, city or plan?"
+            placeholder="Search by name, code, email, city or plan..."
             className={`${inputClass} pl-10`}
           />
         </label>
+        <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 text-xs font-semibold">
+          {["ALL", "ACTIVE", "TRIAL", "SUSPENDED", "ARCHIVED"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setStatusFilter(tab)}
+              className={`rounded-lg px-3 py-1.5 transition ${
+                statusFilter === tab
+                  ? "bg-white text-zinc-900 shadow-sm"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              {tab.charAt(0) + tab.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
       </div>
+
       <Table
         head={[
-          "Salon",
+          "Salon Workspace",
           "Plan",
           "Customers",
           "Appointments",
-          "Revenue",
+          "Paid Revenue",
           "Status",
+          "Actions",
         ]}
         loading={loading}
         empty={
-          !salons.length
+          !filtered.length
             ? {
-                title: search ? "No matching salons" : "No salons yet",
+                title: search ? "No matching salons" : "No salons in this view",
                 message: search
-                  ? "Try a different search."
-                  : "Create a salon to begin.",
+                  ? "Try adjusting your search criteria."
+                  : "Create a new salon to get started.",
                 action: !search && (
                   <button onClick={onCreate} className={buttonClass}>
-                    <Plus className="h-4 w-4" />
-                    Add salon
+                    <Plus className="h-4 w-4" /> Add Salon
                   </button>
                 ),
               }
             : undefined
         }
       >
-        {salons.map((s) => (
-          <tr key={s.id}>
+        {filtered.map((s) => (
+          <tr key={s.id} className="hover:bg-zinc-50/50 transition">
             <td data-label="Salon" className="px-5 py-4">
-              <div className="flex gap-3">
+              <div className="flex gap-3 items-center">
                 <Avatar name={s.salonName} />
                 <div>
-                  <b>{s.salonName}</b>
+                  <b className="text-sm font-bold text-zinc-900">{s.salonName}</b>
                   <p className="text-xs text-zinc-500">
-                    {s.code} ? {s.city || "Location pending"}
+                    <span className="font-mono text-zinc-700">{s.code}</span> • {s.city || "Location pending"} • {s.email}
                   </p>
                 </div>
               </div>
             </td>
             <td data-label="Plan" className="px-5 py-4">
-              {s.subscriptionPlan}
+              <span className="inline-flex rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-800">
+                {s.subscriptionPlan}
+              </span>
             </td>
-            <td data-label="Customers" className="px-5 py-4">
-              {s._count.customers}
+            <td data-label="Customers" className="px-5 py-4 font-medium text-zinc-700">
+              {s._count?.customers || 0}
             </td>
-            <td data-label="Appointments" className="px-5 py-4">
-              {s._count.appointments}
+            <td data-label="Appointments" className="px-5 py-4 font-medium text-zinc-700">
+              {s._count?.appointments || 0}
             </td>
-            <td data-label="Revenue" className="px-5 py-4 font-semibold">
+            <td data-label="Revenue" className="px-5 py-4 font-bold text-zinc-900">
               {money(s.paidRevenue)}
             </td>
             <td data-label="Status" className="px-5 py-4">
-              <Status value={s.status} />
+              <StatusBadge value={s.status} />
+            </td>
+            <td data-label="Actions" className="px-5 py-4 text-right">
+              <div className="flex items-center justify-end gap-1.5">
+                <button
+                  onClick={() => onViewDetails(s)}
+                  className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition"
+                  title="View Details"
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => onEdit(s)}
+                  className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition"
+                  title="Edit Salon Profile"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                {s.status === "ACTIVE" ? (
+                  <button
+                    onClick={() => onUpdateStatus(s.id, "SUSPENDED")}
+                    className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 transition"
+                    title="Suspend Salon"
+                  >
+                    <ShieldAlert className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onUpdateStatus(s.id, "ACTIVE")}
+                    className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 transition"
+                    title="Activate Salon"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                )}
+                <button
+                  onClick={() => onDelete(s)}
+                  className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                  title="Archive Salon"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </td>
           </tr>
         ))}
@@ -598,103 +825,239 @@ export function SalonsView({
     </Panel>
   );
 }
+
+// -------------------------------------------------------------
+// 3. SUBSCRIPTIONS VIEW (Plan Upgrades & Trial Extension)
+// -------------------------------------------------------------
 export function SubscriptionsView({
   items,
   loading,
+  onUpgradePlan,
+  onExtendTrial,
+  onUpdateStatus,
 }: {
   items: Subscription[];
   loading: boolean;
+  onUpgradePlan: (sub: Subscription, newPlan: string) => void;
+  onExtendTrial: (sub: Subscription) => void;
+  onUpdateStatus: (salonId: string, status: Status) => void;
 }) {
   return (
     <Panel
-      title="Subscription overview"
-      subtitle="Plans, status and trial dates"
+      title="Subscription Plans & Accounts"
+      subtitle="Manage tiers, trial extensions, and status"
     >
       <Table
-        head={["Salon", "Plan", "Status", "Trial ends", "Started"]}
+        head={["Salon Workspace", "Current Plan", "Status", "Trial Expiry", "Account Created", "Actions"]}
         loading={loading}
         empty={
           !items.length
             ? {
-                title: "No subscriptions",
-                message: "Records will appear here.",
+                title: "No subscriptions found",
+                message: "Salon subscription accounts will appear here.",
               }
             : undefined
         }
       >
-        {items.map((x) => (
-          <tr key={x.id}>
-            <td data-label="Salon" className="px-5 py-4">
-              <b>{x.salonName}</b>
-              <p className="text-xs text-zinc-500">{x.code}</p>
-            </td>
-            <td data-label="Plan" className="px-5 py-4">
-              {x.subscriptionPlan}
-            </td>
-            <td data-label="Status" className="px-5 py-4">
-              <Status value={x.status} />
-            </td>
-            <td data-label="Trial ends" className="px-5 py-4">
-              {date(x.trialEndsAt)}
-            </td>
-            <td data-label="Started" className="px-5 py-4">
-              {date(x.createdAt)}
-            </td>
-          </tr>
-        ))}
+        {items.map((x) => {
+          let trialDaysLeft = null;
+          if (x.trialEndsAt) {
+            const diff = new Date(x.trialEndsAt).getTime() - Date.now();
+            trialDaysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+          }
+
+          return (
+            <tr key={x.id} className="hover:bg-zinc-50/50 transition">
+              <td data-label="Salon" className="px-5 py-4">
+                <b>{x.salonName}</b>
+                <p className="text-xs text-zinc-500 font-mono">{x.code}</p>
+              </td>
+              <td data-label="Plan" className="px-5 py-4">
+                <select
+                  value={x.subscriptionPlan}
+                  onChange={(e) => onUpgradePlan(x, e.target.value)}
+                  className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-800 outline-none hover:border-zinc-400 transition"
+                >
+                  <option value="Starter">Starter</option>
+                  <option value="Professional">Professional</option>
+                  <option value="Enterprise">Enterprise</option>
+                </select>
+              </td>
+              <td data-label="Status" className="px-5 py-4">
+                <StatusBadge value={x.status} />
+              </td>
+              <td data-label="Trial ends" className="px-5 py-4">
+                <div>
+                  <span className="text-xs text-zinc-700 font-medium block">{date(x.trialEndsAt)}</span>
+                  {trialDaysLeft !== null && (
+                    <span
+                      className={`text-[11px] font-bold ${
+                        trialDaysLeft <= 0
+                          ? "text-rose-600"
+                          : trialDaysLeft <= 5
+                          ? "text-amber-600"
+                          : "text-emerald-600"
+                      }`}
+                    >
+                      {trialDaysLeft <= 0 ? "Trial Expired" : `${trialDaysLeft} days remaining`}
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td data-label="Started" className="px-5 py-4 text-xs text-zinc-500">
+                {date(x.createdAt)}
+              </td>
+              <td data-label="Actions" className="px-5 py-4 text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => onExtendTrial(x)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition"
+                  >
+                    <Clock className="h-3 w-3" /> Extend Trial
+                  </button>
+                  {x.status === "SUSPENDED" ? (
+                    <button
+                      onClick={() => onUpdateStatus(x.id, "ACTIVE")}
+                      className="rounded-lg bg-emerald-600 text-white px-2.5 py-1 text-xs font-semibold hover:bg-emerald-700 transition"
+                    >
+                      Activate
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onUpdateStatus(x.id, "SUSPENDED")}
+                      className="rounded-lg bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-1 text-xs font-semibold hover:bg-rose-100 transition"
+                    >
+                      Suspend
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        })}
       </Table>
     </Panel>
   );
 }
+
+// -------------------------------------------------------------
+// 4. USERS VIEW (Platform & Salon Admins + Reset Password)
+// -------------------------------------------------------------
 export function UsersView({
   items,
   loading,
   onToggle,
+  onCreateUser,
+  onResetPassword,
 }: {
   items: PlatformUser[];
   loading: boolean;
   onToggle: (u: PlatformUser) => void;
+  onCreateUser: () => void;
+  onResetPassword: (u: PlatformUser) => void;
 }) {
+  const [search, setSearch] = useState("");
+
+  const filtered = items.filter((u) =>
+    `${u.name} ${u.email} ${u.role} ${u.salon?.salonName || ""}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+
   return (
-    <Panel title="User access" subtitle="Platform and salon administrators">
+    <Panel
+      title="User Access & Security"
+      subtitle="Manage platform and salon administrator credentials"
+      action={
+        <button onClick={onCreateUser} className={buttonClass}>
+          <UserPlus className="h-4 w-4" /> Add Admin User
+        </button>
+      }
+    >
+      <div className="border-b border-zinc-100 p-4 sm:px-6 bg-zinc-50/50">
+        <label className="relative block max-w-sm">
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search users by name, email or workspace..."
+            className={`${inputClass} pl-10`}
+          />
+        </label>
+      </div>
+
       <Table
-        head={["User", "Role", "Workspace", "Status", "Action"]}
+        head={["User Identity", "Role", "Assigned Workspace", "Status", "Actions"]}
         loading={loading}
         empty={
-          !items.length
-            ? { title: "No users", message: "Accounts will appear here." }
+          !filtered.length
+            ? { title: "No users found", message: "User accounts will appear here." }
             : undefined
         }
       >
-        {items.map((u) => (
-          <tr key={u.id}>
+        {filtered.map((u) => (
+          <tr key={u.id} className="hover:bg-zinc-50/50 transition">
             <td data-label="User" className="px-5 py-4">
-              <div className="flex gap-3">
+              <div className="flex gap-3 items-center">
                 <Avatar name={u.name} round />
                 <div>
-                  <b>{u.name}</b>
+                  <b className="text-sm font-bold text-zinc-900">{u.name}</b>
                   <p className="text-xs text-zinc-500">{u.email}</p>
                 </div>
               </div>
             </td>
-            <td data-label="Role" className="px-5 py-4 capitalize">
-              {String(u.role ?? "Unknown")
-                .replaceAll("_", " ")
-                .toLowerCase()}
+            <td data-label="Role" className="px-5 py-4">
+              <span
+                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                  u.role === "PLATFORM_ADMIN"
+                    ? "bg-purple-100 text-purple-800 border border-purple-200"
+                    : "bg-blue-100 text-blue-800 border border-blue-200"
+                }`}
+              >
+                {u.role.replaceAll("_", " ")}
+              </span>
             </td>
-            <td data-label="Workspace" className="px-5 py-4">
-              {u.salon?.salonName || "Platform"}
+            <td data-label="Workspace" className="px-5 py-4 text-sm text-zinc-700">
+              {u.salon ? (
+                <div>
+                  <span className="font-semibold">{u.salon.salonName}</span>
+                  <span className="block text-xs text-zinc-400 font-mono">{u.salon.code}</span>
+                </div>
+              ) : (
+                <span className="text-xs font-semibold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded">
+                  Platform Wide
+                </span>
+              )}
             </td>
             <td data-label="Status" className="px-5 py-4">
-              {u.active ? "Active" : "Inactive"}
-            </td>
-            <td data-label="Action" className="px-5 py-4">
-              <button
-                onClick={() => onToggle(u)}
-                className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+              <span
+                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                  u.active ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-500"
+                }`}
               >
-                {u.active ? "Disable" : "Enable"}
-              </button>
+                {u.active ? "Active" : "Disabled"}
+              </span>
+            </td>
+            <td data-label="Actions" className="px-5 py-4 text-right">
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => onResetPassword(u)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition"
+                  title="Reset Password"
+                >
+                  <KeyRound className="h-3.5 w-3.5" /> Reset Pass
+                </button>
+                <button
+                  onClick={() => onToggle(u)}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                    u.active
+                      ? "border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100"
+                      : "border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                  }`}
+                >
+                  {u.active ? "Disable" : "Enable"}
+                </button>
+              </div>
             </td>
           </tr>
         ))}
@@ -702,119 +1065,223 @@ export function UsersView({
     </Panel>
   );
 }
+
+// -------------------------------------------------------------
+// 5. AUDIT LOG VIEW (Actor Resolution & Details)
+// -------------------------------------------------------------
+export function AuditView({
+  items,
+  loading,
+}: {
+  items: AuditItem[];
+  loading: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [entityFilter, setEntityFilter] = useState("ALL");
+
+  const filtered = items.filter((x) => {
+    if (entityFilter !== "ALL" && (x.entity ?? "") !== entityFilter) return false;
+    const q = search.toLowerCase();
+    return (
+      (x.action ?? "").toLowerCase().includes(q) ||
+      (x.entity ?? "").toLowerCase().includes(q) ||
+      (x.actor?.name || "").toLowerCase().includes(q) ||
+      (x.actor?.email || "").toLowerCase().includes(q) ||
+      (x.entityId || "").toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <Panel title="Platform Activity Audit Trail" subtitle="Chronological record of changes and events">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 p-4 sm:px-6 bg-zinc-50/50">
+        <label className="relative block max-w-sm flex-1 min-w-[240px]">
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search action, actor name, email or entity..."
+            className={`${inputClass} pl-10`}
+          />
+        </label>
+        <select
+          value={entityFilter}
+          onChange={(e) => setEntityFilter(e.target.value)}
+          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold outline-none"
+        >
+          <option value="ALL">All Entities</option>
+          <option value="SALON">Salon</option>
+          <option value="USER">User</option>
+          <option value="PLATFORM">Platform</option>
+          <option value="NOTIFICATION">Notification</option>
+        </select>
+      </div>
+
+      <Table
+        head={["Actor / Admin", "Action Event", "Entity", "Reference / ID", "Timestamp"]}
+        loading={loading}
+        empty={
+          !filtered.length
+            ? {
+                title: "No audit records",
+                message: "Platform operations will be recorded here.",
+              }
+            : undefined
+        }
+      >
+        {filtered.map((x) => (
+          <tr key={x.id} className="hover:bg-zinc-50/50 transition">
+            <td data-label="Actor" className="px-5 py-4">
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-7 grid place-items-center rounded-full bg-zinc-900 text-white text-[10px] font-bold">
+                  {(x.actor?.name || "AD").slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <b className="text-xs font-bold text-zinc-900 block">{x.actor?.name || "System Admin"}</b>
+                  <span className="text-[11px] text-zinc-400">{x.actor?.email || "system@dropxcutz.com"}</span>
+                </div>
+              </div>
+            </td>
+            <td data-label="Action" className="px-5 py-4 font-semibold text-zinc-900">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2 py-1 text-xs font-mono font-bold text-zinc-800">
+                <FileClock className="h-3 w-3 text-zinc-500" />
+                {x.action}
+              </span>
+            </td>
+            <td data-label="Entity" className="px-5 py-4 text-xs font-semibold text-zinc-600">
+              {x.entity}
+            </td>
+            <td data-label="Reference" className="px-5 py-4 font-mono text-xs text-zinc-500">
+              {x.entityId || "—"}
+            </td>
+            <td data-label="Timestamp" className="px-5 py-4 text-xs text-zinc-500">
+              {new Date(x.createdAt).toLocaleString("en-IN")}
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </Panel>
+  );
+}
+
+// -------------------------------------------------------------
+// 6. FINANCIALS VIEW (Platform-wide Analytics)
+// -------------------------------------------------------------
 export function FinancialView({ salons }: { salons: Salon[] }) {
-  const revenue = salons.reduce((sum, salon) => sum + salon.paidRevenue, 0);
-  const customers = salons.reduce(
-    (sum, salon) => sum + salon._count.customers,
-    0,
-  );
-  const appointments = salons.reduce(
-    (sum, salon) => sum + salon._count.appointments,
-    0,
-  );
+  const revenue = salons.reduce((sum, salon) => sum + (salon.paidRevenue || 0), 0);
+  const customers = salons.reduce((sum, salon) => sum + (salon._count?.customers || 0), 0);
+  const appointments = salons.reduce((sum, salon) => sum + (salon._count?.appointments || 0), 0);
   const average = salons.length ? revenue / salons.length : 0;
-  const ranked = [...salons].sort((a, b) => b.paidRevenue - a.paidRevenue);
-  const money = (value: number) =>
-    new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(value);
+  const ranked = [...salons].sort((a, b) => (b.paidRevenue || 0) - (a.paidRevenue || 0));
+
+  const planStats = {
+    Starter: salons.filter((s) => s.subscriptionPlan === "Starter").length,
+    Professional: salons.filter((s) => s.subscriptionPlan === "Professional").length,
+    Enterprise: salons.filter((s) => s.subscriptionPlan === "Enterprise").length,
+  };
+
+  const statCards = [
+    { title: "Total Invoiced Revenue", val: money(revenue), sub: "Paid revenue across platform", Icon: CircleDollarSign },
+    { title: "Average Revenue / Salon", val: money(average), sub: "Across all active workspaces", Icon: TrendingUp },
+    { title: "Platform Client Base", val: String(customers), sub: "Registered salon customers", Icon: Users },
+    { title: "Total Bookings Processed", val: String(appointments), sub: "Appointments completed", Icon: CalendarDays },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Platform revenue", money(revenue), "Paid invoice revenue", "INR"],
-          ["Average per salon", money(average), "Across all workspaces", "AVG"],
-          [
-            "Platform customers",
-            String(customers),
-            "Across all salons",
-            "USERS",
-          ],
-          [
-            "Appointments",
-            String(appointments),
-            "Recorded appointments",
-            "APPT",
-          ],
-        ].map(([title, value, subtitle, icon], index) => (
+        {statCards.map(({ title, val, sub, Icon }, idx) => (
           <motion.div
             key={title}
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.06 }}
+            transition={{ delay: idx * 0.05 }}
             className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-zinc-500">{title}</p>
-                <p className="mt-3 text-3xl font-bold text-zinc-950">{value}</p>
-                <p className="mt-3 text-sm text-zinc-500">{subtitle}</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">{title}</p>
+                <p className="mt-2 text-2xl font-bold text-zinc-950">{val}</p>
+                <p className="mt-1 text-xs text-zinc-500">{sub}</p>
               </div>
-              <span className="grid h-11 w-11 place-items-center rounded-xl bg-zinc-100 text-lg font-bold text-zinc-700">
-                {icon}
-              </span>
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 text-zinc-900">
+                <Icon className="h-5 w-5" />
+              </div>
             </div>
           </motion.div>
         ))}
       </div>
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
-      >
-        <div className="border-b border-zinc-200 p-5">
-          <h3 className="text-lg font-semibold">Revenue by salon</h3>
-          <p className="mt-1 text-sm text-zinc-500">
-            Live paid revenue ranked by workspace
-          </p>
-        </div>
-        {!ranked.length ? (
-          <p className="p-8 text-center text-sm text-zinc-500">
-            No salon financial data yet.
-          </p>
-        ) : (
-          <div className="divide-y divide-zinc-100">
-            {ranked.map((salon, index) => (
-              <motion.div
-                layout
-                key={salon.id}
-                className="flex items-center gap-4 p-5"
-              >
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-zinc-900 text-sm font-bold text-white">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-semibold">{salon.salonName}</p>
-                      <p className="text-xs text-zinc-500">
-                        {salon.code} - {salon._count.customers} customers
-                      </p>
+
+      <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+        <Panel title="Revenue Leaderboard by Salon" subtitle="Ranked gross paid revenue per workspace">
+          {!ranked.length ? (
+            <p className="p-8 text-center text-sm text-zinc-500">No salon financial records yet.</p>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {ranked.map((salon, index) => (
+                <div key={salon.id} className="flex items-center gap-4 p-5 hover:bg-zinc-50/50 transition">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-900 text-xs font-bold text-white">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-bold text-sm text-zinc-900">{salon.salonName}</p>
+                        <p className="text-xs text-zinc-500 font-mono">
+                          {salon.code} • {salon._count?.customers || 0} customers • {salon.subscriptionPlan}
+                        </p>
+                      </div>
+                      <b className="text-sm font-bold text-zinc-950">{money(salon.paidRevenue)}</b>
                     </div>
-                    <b>{money(salon.paidRevenue)}</b>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-100">
+                      <div
+                        style={{
+                          width: `${revenue ? Math.max((salon.paidRevenue / revenue) * 100, 3) : 0}%`,
+                        }}
+                        className="h-full rounded-full bg-zinc-900"
+                      />
+                    </div>
                   </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{
-                        width: `${revenue ? Math.max((salon.paidRevenue / revenue) * 100, 2) : 0}%`,
-                      }}
-                      transition={{ duration: 0.7, delay: index * 0.08 }}
-                      className="h-full rounded-full bg-zinc-900"
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="Plan Distribution" subtitle="Active subscription tiers">
+          <div className="p-6 space-y-4">
+            {Object.entries(planStats).map(([plan, count]) => {
+              const pct = salons.length ? Math.round((count / salons.length) * 100) : 0;
+              return (
+                <div key={plan} className="space-y-1.5">
+                  <div className="flex justify-between text-sm font-semibold">
+                    <span className="text-zinc-700">{plan} Tier</span>
+                    <span className="text-zinc-900">{count} salons ({pct}%)</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        plan === "Enterprise"
+                          ? "bg-purple-600"
+                          : plan === "Professional"
+                          ? "bg-blue-600"
+                          : "bg-emerald-600"
+                      }`}
+                      style={{ width: `${pct}%` }}
                     />
                   </div>
                 </div>
-              </motion.div>
-            ))}
+              );
+            })}
           </div>
-        )}
-      </motion.div>
+        </Panel>
+      </div>
     </div>
   );
 }
+
+// -------------------------------------------------------------
+// 7. NOTIFICATIONS VIEW
+// -------------------------------------------------------------
 export function NotificationView({
   salons,
   submitting,
@@ -826,13 +1293,13 @@ export function NotificationView({
 }) {
   return (
     <Panel
-      title="Send ERP notification"
-      subtitle="Send an announcement to one salon or every active workspace."
+      title="Broadcast Platform Notification"
+      subtitle="Send high-priority system announcements to salon ERP dashboards"
     >
-      <form onSubmit={onSubmit} className="grid gap-5 p-6">
-        <Field label="Recipient">
+      <form onSubmit={onSubmit} className="grid gap-5 p-6 max-w-2xl">
+        <Field label="Recipient Workspace">
           <select name="salonId" className={inputClass} defaultValue="all">
-            <option value="all">All salons</option>
+            <option value="all">📢 All Active Salons (Broadcast)</option>
             {salons.map((salon) => (
               <option key={salon.id} value={salon.id}>
                 {salon.salonName} ({salon.code})
@@ -840,80 +1307,37 @@ export function NotificationView({
             ))}
           </select>
         </Field>
-        <Field label="Title">
+        <Field label="Announcement Title">
           <input
             required
             maxLength={160}
             name="title"
             className={inputClass}
-            placeholder="Important update"
+            placeholder="e.g. Scheduled System Maintenance Notice"
           />
         </Field>
-        <Field label="Message">
+        <Field label="Message Content">
           <textarea
             required
             maxLength={5000}
             name="message"
             rows={5}
             className={inputClass}
-            placeholder="Write the message ERP admins should see."
+            placeholder="Write the message that salon ERP administrators will receive in their notification bell..."
           />
         </Field>
         <button disabled={submitting} className={`${buttonClass} w-fit`}>
           <Bell className="h-4 w-4" />
-          {submitting ? "Sending..." : "Send notification"}
+          {submitting ? "Transmitting..." : "Send Announcement"}
         </button>
       </form>
     </Panel>
   );
 }
-export function AuditView({
-  items,
-  loading,
-}: {
-  items: AuditItem[];
-  loading: boolean;
-}) {
-  return (
-    <Panel title="Activity history" subtitle="Recent platform changes">
-      <Table
-        head={["Action", "Entity", "Reference", "Date"]}
-        loading={loading}
-        empty={
-          !items.length
-            ? {
-                title: "No activity",
-                message: "Changes will be recorded here.",
-              }
-            : undefined
-        }
-      >
-        {items.map((x) => (
-          <tr key={x.id}>
-            <td
-              data-label="Action"
-              className="px-5 py-4 font-semibold capitalize"
-            >
-              <FileClock className="mr-2 inline h-4 w-4 text-zinc-700" />
-              {String(x.action ?? "Unknown action")
-                .replaceAll("_", " ")
-                .toLowerCase()}
-            </td>
-            <td data-label="Entity" className="px-5 py-4">
-              {x.entity}
-            </td>
-            <td data-label="Reference" className="px-5 py-4 text-zinc-500">
-              {x.entityId || "?"}
-            </td>
-            <td data-label="Date" className="px-5 py-4">
-              {date(x.createdAt)}
-            </td>
-          </tr>
-        ))}
-      </Table>
-    </Panel>
-  );
-}
+
+// -------------------------------------------------------------
+// 8. SETTINGS VIEW
+// -------------------------------------------------------------
 export function SettingsView({
   settings,
   loading,
@@ -927,55 +1351,62 @@ export function SettingsView({
 }) {
   if (loading || !settings)
     return <div className="h-64 animate-pulse rounded-2xl bg-zinc-100" />;
+
   return (
     <form onSubmit={onSubmit}>
       <Panel
-        title="Platform settings"
-        subtitle="Identity, security and workspace defaults"
+        title="Platform Configuration"
+        subtitle="Global security, authentication and trial policies"
       >
         <div className="grid gap-5 p-6 sm:grid-cols-2">
           <Input
             name="platformName"
-            label="Platform name"
+            label="Platform Brand Name"
             defaultValue={settings.platformName}
           />
           <Input
             name="supportEmail"
-            label="Support email"
+            label="Official Support Email"
             type="email"
             defaultValue={settings.supportEmail || ""}
           />
           <Input
             name="defaultTrialDays"
-            label="Default trial days"
+            label="Default Trial Period (Days)"
             type="number"
             min={1}
             defaultValue={settings.defaultTrialDays}
           />
           <Input
             name="sessionHours"
-            label="Session duration (hours)"
+            label="Admin Session Expiry (Hours)"
             type="number"
             min={1}
             defaultValue={settings.sessionHours}
           />
           <Input
             name="passwordMinimumLength"
-            label="Minimum password length"
+            label="Minimum Password Length"
             type="number"
             min={8}
             defaultValue={settings.passwordMinimumLength}
           />
         </div>
-        <div className="flex justify-end border-t border-zinc-100 bg-zinc-50 p-4">
+        <div className="flex justify-end border-t border-zinc-100 bg-zinc-50 p-4 sm:px-6">
           <button disabled={submitting} className={buttonClass}>
-            {submitting ? "Saving?" : "Save changes"}
+            {submitting ? "Saving..." : "Save Platform Settings"}
           </button>
         </div>
       </Panel>
     </form>
   );
 }
+
+// -------------------------------------------------------------
+// MODALS
+// -------------------------------------------------------------
+
+// A. Create Salon Modal
 export function CreateSalonModal({
   onSubmit,
   onClose,
@@ -993,77 +1424,74 @@ export function CreateSalonModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/50 sm:items-center sm:p-5"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <form
         onSubmit={onSubmit}
         role="dialog"
-        className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+        className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
       >
-        <header className="flex justify-between border-b p-5 sm:px-7">
+        <header className="flex justify-between items-center border-b p-5 sm:px-7">
           <div>
-            <p className="text-xs font-bold uppercase text-zinc-700">
-              New workspace
-            </p>
-            <h2 className="text-xl font-bold">Add a salon</h2>
-            <p className="text-sm text-zinc-500">
-              Create the workspace and its administrator.
-            </p>
+            <p className="text-xs font-bold uppercase text-zinc-400">New Workspace</p>
+            <h2 className="text-xl font-bold text-zinc-950">Add Salon Workspace</h2>
           </div>
-          <button type="button" onClick={onClose}>
-            <X />
+          <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
+            <X className="h-5 w-5 text-zinc-500" />
           </button>
         </header>
-        <div className="overflow-y-auto p-5 sm:px-7">
-          <b>Salon details</b>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Input name="salonName" label="Salon name" autoFocus />
-            <Input name="code" label="Salon code" />
-            <Input name="legalName" label="Legal name" />
-            <Input name="phone" label="Phone" />
-            <Input name="email" label="Salon email" type="email" />
-            <Field label="Subscription plan">
-              <select name="plan" className={inputClass}>
-                <option>Starter</option>
-                <option>Professional</option>
-                <option>Enterprise</option>
-              </select>
-            </Field>
-            <Input name="city" label="City" required={false} />
-            <Input name="state" label="State" required={false} />
-          </div>
-          <hr className="my-6 border-zinc-100" />
-          <b>Administrator access</b>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Input name="adminName" label="Administrator name" />
-            <Input name="adminEmail" label="Administrator email" type="email" />
-            <div className="sm:col-span-2">
-              <Field
-                label="Temporary password"
-                hint="Auto-generated with uppercase, lowercase, number and symbol. Share it securely with the salon admin."
-              >
-                <div className="flex gap-2">
-                  <input
-                    required
-                    name="adminPassword"
-                    type="text"
-                    minLength={8}
-                    value={temporaryPassword}
-                    onChange={(event) =>
-                      onTemporaryPasswordChange(event.target.value)
-                    }
-                    className={inputClass}
-                  />
-                  <button
-                    type="button"
-                    onClick={onGeneratePassword}
-                    className="shrink-0 rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
-                  >
-                    Generate
-                  </button>
-                </div>
+        <div className="overflow-y-auto p-5 sm:px-7 space-y-6">
+          <div>
+            <b className="text-sm font-bold text-zinc-900 block mb-3">Salon Identity & Location</b>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input name="salonName" label="Salon Trade Name" placeholder="Velvet Glow Salon & Spa" required autoFocus />
+              <Input name="code" label="Salon URL Code" placeholder="velvet-glow" required />
+              <Input name="legalName" label="Legal Entity Name" placeholder="Velvet Glow Pvt Ltd" required />
+              <Input name="phone" label="Official Phone" placeholder="+91 9876543210" required />
+              <Input name="email" label="Official Salon Email" type="email" placeholder="contact@velvetglow.com" required />
+              <Field label="Subscription Tier">
+                <select name="plan" className={inputClass} defaultValue="Starter">
+                  <option value="Starter">Starter Plan</option>
+                  <option value="Professional">Professional Plan</option>
+                  <option value="Enterprise">Enterprise Plan</option>
+                </select>
               </Field>
+              <Input name="city" label="City" placeholder="Bangalore" />
+              <Input name="state" label="State" placeholder="Karnataka" />
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-100 pt-5">
+            <b className="text-sm font-bold text-zinc-900 block mb-3">Initial Administrator Account</b>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input name="adminName" label="Administrator Full Name" placeholder="Rohan Sharma" required />
+              <Input name="adminEmail" label="Admin Login Email" type="email" placeholder="rohan@velvetglow.com" required />
+              <div className="sm:col-span-2">
+                <Field
+                  label="Temporary Password"
+                  hint="Share this temporary password securely with the salon admin."
+                >
+                  <div className="flex gap-2">
+                    <input
+                      required
+                      name="adminPassword"
+                      type="text"
+                      minLength={8}
+                      value={temporaryPassword}
+                      onChange={(e) => onTemporaryPasswordChange(e.target.value)}
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={onGeneratePassword}
+                      className="shrink-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                    >
+                      Generate New
+                    </button>
+                  </div>
+                </Field>
+              </div>
             </div>
           </div>
         </div>
@@ -1071,15 +1499,452 @@ export function CreateSalonModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold"
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700"
           >
             Cancel
           </button>
           <button disabled={submitting} className={buttonClass}>
-            {submitting ? "Creating?" : "Create salon"}
+            {submitting ? "Creating..." : "Create Salon Workspace"}
           </button>
         </footer>
       </form>
+    </div>
+  );
+}
+
+// B. Edit Salon Modal
+export function EditSalonModal({
+  salon,
+  onClose,
+  onSubmit,
+  submitting,
+}: {
+  salon: Salon;
+  onClose: () => void;
+  onSubmit: (id: string, patch: Partial<Salon>) => void;
+  submitting: boolean;
+}) {
+  const [form, setForm] = useState({
+    salonName: salon.salonName,
+    legalName: salon.legalName || "",
+    phone: salon.phone || "",
+    email: salon.email,
+    city: salon.city || "",
+    state: salon.state || "",
+    subscriptionPlan: salon.subscriptionPlan,
+    status: salon.status,
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(salon.id, form);
+        }}
+        className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+      >
+        <header className="flex justify-between items-center border-b p-5 sm:px-7">
+          <div>
+            <p className="text-xs font-bold uppercase text-zinc-400">Edit Salon</p>
+            <h2 className="text-xl font-bold text-zinc-950">{salon.salonName}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
+            <X className="h-5 w-5 text-zinc-500" />
+          </button>
+        </header>
+        <div className="overflow-y-auto p-5 sm:px-7 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Salon Trade Name">
+              <input
+                required
+                value={form.salonName}
+                onChange={(e) => setForm({ ...form, salonName: e.target.value })}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Legal Entity Name">
+              <input
+                value={form.legalName}
+                onChange={(e) => setForm({ ...form, legalName: e.target.value })}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Contact Phone">
+              <input
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Official Email">
+              <input
+                required
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="City">
+              <input
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Subscription Plan">
+              <select
+                value={form.subscriptionPlan}
+                onChange={(e) => setForm({ ...form, subscriptionPlan: e.target.value })}
+                className={inputClass}
+              >
+                <option value="Starter">Starter</option>
+                <option value="Professional">Professional</option>
+                <option value="Enterprise">Enterprise</option>
+              </select>
+            </Field>
+            <Field label="Account Status">
+              <select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as Status })}
+                className={inputClass}
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="TRIAL">TRIAL</option>
+                <option value="SUSPENDED">SUSPENDED</option>
+                <option value="ARCHIVED">ARCHIVED</option>
+              </select>
+            </Field>
+          </div>
+        </div>
+        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700"
+          >
+            Cancel
+          </button>
+          <button disabled={submitting} className={buttonClass}>
+            {submitting ? "Saving..." : "Save Changes"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+// C. Create User Modal
+export function CreateUserModal({
+  salons,
+  onClose,
+  onSubmit,
+  submitting,
+}: {
+  salons: Salon[];
+  onClose: () => void;
+  onSubmit: (user: { name: string; email: string; password: string; role: string; salonId?: string }) => void;
+  submitting: boolean;
+}) {
+  const [role, setRole] = useState("PLATFORM_ADMIN");
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const f = new FormData(e.currentTarget);
+          onSubmit({
+            name: String(f.get("name")),
+            email: String(f.get("email")),
+            password: String(f.get("password")),
+            role: String(f.get("role")),
+            salonId: String(f.get("salonId") || "") || undefined,
+          });
+        }}
+        className="flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+      >
+        <header className="flex justify-between items-center border-b p-5 sm:px-7">
+          <div>
+            <p className="text-xs font-bold uppercase text-zinc-400">Security & Credentials</p>
+            <h2 className="text-xl font-bold text-zinc-950">Add Administrator User</h2>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
+            <X className="h-5 w-5 text-zinc-500" />
+          </button>
+        </header>
+        <div className="overflow-y-auto p-5 sm:px-7 space-y-4">
+          <Input name="name" label="Full Name" placeholder="Gopal Verma" required autoFocus />
+          <Input name="email" label="Email Address" type="email" placeholder="admin@example.com" required />
+          <Input name="password" label="Initial Password (8+ characters)" type="password" minLength={8} required />
+          <Field label="Administrator Role">
+            <select
+              name="role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className={inputClass}
+            >
+              <option value="PLATFORM_ADMIN">PLATFORM_ADMIN (Root Access)</option>
+              <option value="SALON_ADMIN">SALON_ADMIN (Salon Workspace Access)</option>
+            </select>
+          </Field>
+          {role === "SALON_ADMIN" && (
+            <Field label="Assign to Salon Workspace">
+              <select name="salonId" className={inputClass} required>
+                <option value="">Select Salon...</option>
+                {salons.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.salonName} ({s.code})
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+        </div>
+        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700"
+          >
+            Cancel
+          </button>
+          <button disabled={submitting} className={buttonClass}>
+            {submitting ? "Creating..." : "Create User"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+// D. Reset Password Modal
+export function ResetPasswordModal({
+  user,
+  onClose,
+  onSubmit,
+  submitting,
+}: {
+  user: PlatformUser;
+  onClose: () => void;
+  onSubmit: (id: string, newPass: string) => void;
+  submitting: boolean;
+}) {
+  const [password, setPassword] = useState("");
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(user.id, password);
+        }}
+        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+      >
+        <header className="flex justify-between items-center border-b p-5">
+          <div>
+            <p className="text-xs font-bold uppercase text-zinc-400">Password Reset</p>
+            <h2 className="text-lg font-bold text-zinc-950">{user.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
+            <X className="h-5 w-5 text-zinc-500" />
+          </button>
+        </header>
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-zinc-500">
+            Set a new master password for <b className="text-zinc-900">{user.email}</b>.
+          </p>
+          <Field label="New Password (8+ characters)">
+            <input
+              required
+              minLength={8}
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter new password"
+              className={inputClass}
+              autoFocus
+            />
+          </Field>
+        </div>
+        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700"
+          >
+            Cancel
+          </button>
+          <button disabled={submitting} className={buttonClass}>
+            {submitting ? "Updating..." : "Update Password"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+// E. Extend Trial Modal
+export function ExtendTrialModal({
+  subscription,
+  onClose,
+  onSubmit,
+  submitting,
+}: {
+  subscription: Subscription;
+  onClose: () => void;
+  onSubmit: (id: string, date: string) => void;
+  submitting: boolean;
+}) {
+  const currentOrTomorrow = subscription.trialEndsAt
+    ? new Date(subscription.trialEndsAt).toISOString().split("T")[0]
+    : new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0];
+
+  const [targetDate, setTargetDate] = useState(currentOrTomorrow);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(subscription.id, targetDate);
+        }}
+        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+      >
+        <header className="flex justify-between items-center border-b p-5">
+          <div>
+            <p className="text-xs font-bold uppercase text-zinc-400">Trial Extension</p>
+            <h2 className="text-lg font-bold text-zinc-950">{subscription.salonName}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
+            <X className="h-5 w-5 text-zinc-500" />
+          </button>
+        </header>
+        <div className="p-5 space-y-4">
+          <Field label="New Trial Expiration Date">
+            <input
+              required
+              type="date"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <div className="flex gap-2">
+            {[7, 14, 30].map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => {
+                  const d = new Date(Date.now() + days * 86400000);
+                  setTargetDate(d.toISOString().split("T")[0]);
+                }}
+                className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+              >
+                +{days} Days
+              </button>
+            ))}
+          </div>
+        </div>
+        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700"
+          >
+            Cancel
+          </button>
+          <button disabled={submitting} className={buttonClass}>
+            {submitting ? "Saving..." : "Set Expiry Date"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+// F. Salon Details Drawer
+export function SalonDetailsModal({
+  salon,
+  onClose,
+}: {
+  salon: Salon;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100">
+        <header className="flex justify-between items-center border-b p-5 sm:px-7">
+          <div className="flex items-center gap-3">
+            <Avatar name={salon.salonName} />
+            <div>
+              <h2 className="text-xl font-bold text-zinc-950">{salon.salonName}</h2>
+              <p className="text-xs text-zinc-500 font-mono">{salon.code} • {salon.city || "Location pending"}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
+            <X className="h-5 w-5 text-zinc-500" />
+          </button>
+        </header>
+        <div className="overflow-y-auto p-5 sm:px-7 space-y-6">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl bg-zinc-50 p-4 border border-zinc-100">
+              <p className="text-xs font-semibold text-zinc-400 uppercase">Paid Revenue</p>
+              <p className="text-xl font-bold text-zinc-900 mt-1">{money(salon.paidRevenue)}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 p-4 border border-zinc-100">
+              <p className="text-xs font-semibold text-zinc-400 uppercase">Total Clients</p>
+              <p className="text-xl font-bold text-zinc-900 mt-1">{salon._count?.customers || 0}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 p-4 border border-zinc-100">
+              <p className="text-xs font-semibold text-zinc-400 uppercase">Appointments</p>
+              <p className="text-xl font-bold text-zinc-900 mt-1">{salon._count?.appointments || 0}</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-sm">
+            <b className="font-bold text-zinc-900 block border-b border-zinc-100 pb-2">Workspace Information</b>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <span className="text-zinc-500">Legal Entity:</span>
+              <span className="font-semibold text-zinc-900">{salon.legalName || "—"}</span>
+              <span className="text-zinc-500">Official Email:</span>
+              <span className="font-semibold text-zinc-900">{salon.email}</span>
+              <span className="text-zinc-500">Phone:</span>
+              <span className="font-semibold text-zinc-900">{salon.phone || "—"}</span>
+              <span className="text-zinc-500">Subscription Tier:</span>
+              <span className="font-semibold text-zinc-900">{salon.subscriptionPlan}</span>
+              <span className="text-zinc-500">Current Status:</span>
+              <span><StatusBadge value={salon.status} /></span>
+              <span className="text-zinc-500">Created At:</span>
+              <span className="text-zinc-700">{date(salon.createdAt)}</span>
+            </div>
+          </div>
+        </div>
+        <footer className="flex justify-end border-t bg-zinc-50 p-4 sm:px-7">
+          <button
+            onClick={onClose}
+            className="rounded-xl bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+          >
+            Close
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

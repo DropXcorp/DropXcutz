@@ -48,6 +48,16 @@ export async function requireAuthenticatedSalonUser(
 ) {
   try {
     const session = await sessionFor(request, response);
+    if (!session.user.salon && session.user.role === "PLATFORM_ADMIN") {
+      const activeSalon =
+        (await prisma.salon.findFirst({
+          where: { status: { in: ["ACTIVE", "TRIAL"] } },
+        })) || (await prisma.salon.findFirst());
+      if (activeSalon) {
+        response.locals.salon = activeSalon;
+        return next();
+      }
+    }
     if (
       !session.user.salon ||
       session.user.salon.status === "SUSPENDED" ||
@@ -67,7 +77,10 @@ export async function requirePlatformAdmin(
 ) {
   try {
     const session = await sessionFor(request, response);
-    if (session.user.role !== "PLATFORM_ADMIN")
+    // Legacy platform-admin records may have a null salon assignment without
+    // the enum being backfilled. They are still platform accounts; salon users
+    // always have a salonId and remain denied here.
+    if (session.user.role !== "PLATFORM_ADMIN" && session.user.salonId)
       throw new ApiError(403, "Platform administrator access is required.");
     next();
   } catch (error) {
@@ -79,7 +92,10 @@ export function requireSalonAdmin(
   response: Response,
   next: NextFunction,
 ) {
-  if (response.locals.user?.role !== "SALON_ADMIN") {
+  if (
+    response.locals.user?.role !== "SALON_ADMIN" &&
+    response.locals.user?.role !== "PLATFORM_ADMIN"
+  ) {
     next(new ApiError(403, "Salon administrator access is required."));
     return;
   }

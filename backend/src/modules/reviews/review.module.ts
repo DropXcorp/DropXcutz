@@ -4,6 +4,7 @@ import { prisma } from "../../config/prisma";
 import { ok, salonId } from "../../controllers/http.controller";
 import { ApiError } from "../../middleware/error.middleware";
 import { requireSalonAdmin } from "../../middleware/session.middleware";
+import { z } from "zod";
 const dto = (x: any) => ({
   id: x.id,
   customerId: x.customerId,
@@ -11,7 +12,7 @@ const dto = (x: any) => ({
   appointmentId: x.appointmentId,
   employeeId: x.employeeId,
   rating: x.rating,
-  review: x.review,
+  comment: x.review,
   status: x.status,
   createdAt: x.createdAt,
 });
@@ -43,6 +44,43 @@ reviewRouter.get("/", async (req: Request, res: Response) => {
       })
     ).map(dto),
   );
+});
+
+const reviewInput = z.object({
+  customerId: z.string().min(1),
+  appointmentId: z.string().min(1).optional().nullable(),
+  employeeId: z.string().min(1).optional().nullable(),
+  rating: z.coerce.number().int().min(1).max(5),
+  comment: z.string().trim().max(5000).optional().nullable(),
+});
+
+reviewRouter.post("/", requireSalonAdmin, async (req, res) => {
+  const input = reviewInput.parse(req.body);
+  const salon = salonId(res);
+  if (!(await prisma.customer.findFirst({ where: { id: input.customerId, salonId: salon } })))
+    throw new ApiError(404, "Customer not found.");
+  if (input.appointmentId && !(await prisma.appointment.findFirst({ where: { id: input.appointmentId, salonId: salon } })))
+    throw new ApiError(404, "Appointment not found.");
+  if (input.employeeId && !(await prisma.employee.findFirst({ where: { id: input.employeeId, salonId: salon } })))
+    throw new ApiError(404, "Employee not found.");
+  const item = await prisma.$transaction(async (client) => {
+    const created = await client.review.create({
+      data: {
+        salonId: salon,
+        customerId: input.customerId,
+        appointmentId: input.appointmentId || null,
+        employeeId: input.employeeId || null,
+        rating: input.rating,
+        review: input.comment || null,
+      },
+      include: { customer: { select: { name: true } } },
+    });
+    await client.salonAuditLog.create({
+      data: { salonId: salon, userId: user(res), action: "CREATE", entity: "Review", entityId: created.id, newValue: dto(created) },
+    });
+    return created;
+  });
+  res.status(201).json({ data: dto(item) });
 });
 
 

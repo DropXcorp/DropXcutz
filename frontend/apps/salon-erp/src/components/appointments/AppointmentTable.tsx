@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronUp, ChevronDown, CalendarCheck2 } from "lucide-react";
+import { CalendarCheck2 } from "lucide-react";
 import Image from "next/image";
 
 import AppointmentStatus from "@/src/components/appointments/AppointmentStatus";
@@ -13,6 +12,7 @@ export interface AppointmentTableItem {
   customer: {
     id: string;
     name: string;
+    phone?: string;
     avatar?: string;
     membership?: string;
   };
@@ -59,77 +59,29 @@ interface AppointmentTableProps {
   appointments: AppointmentTableItem[];
   loading?: boolean;
   onRowClick?: (appointment: AppointmentTableItem) => void;
-  onSelectionChange?: (selectedIds: string[]) => void;
   onCreateAppointment?: () => void;
+  onAssign?: (appointment: AppointmentTableItem) => void;
+  onCheckIn?: (appointment: AppointmentTableItem) => void;
+  onStart?: (appointment: AppointmentTableItem) => void;
+  onComplete?: (appointment: AppointmentTableItem) => void;
+  onCancel?: (appointment: AppointmentTableItem) => void;
 }
 
 export default function AppointmentTable({
   appointments,
   loading = false,
   onRowClick,
-  onSelectionChange,
   onCreateAppointment,
+  onAssign,
+  onCheckIn,
+  onStart,
+  onComplete,
+  onCancel,
 }: AppointmentTableProps) {
-  const [selectedRows, setSelectedRows] = useState<string[]>([]);
-
-  const allSelected =
-    appointments.length > 0 && selectedRows.length === appointments.length;
-
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelectedRows([]);
-      onSelectionChange?.([]);
-      return;
-    }
-
-    const ids = appointments.map((a) => a.id);
-    setSelectedRows(ids);
-    onSelectionChange?.(ids);
-  };
-
-  const toggleRow = (id: string) => {
-    let updated: string[];
-
-    if (selectedRows.includes(id)) {
-      updated = selectedRows.filter((item) => item !== id);
-    } else {
-      updated = [...selectedRows, id];
-    }
-
-    setSelectedRows(updated);
-    onSelectionChange?.(updated);
-  };
-
-  const selectedCount = useMemo(() => selectedRows.length, [selectedRows]);
-
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      {/* Selected Action Bar */}
-      {selectedCount > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-blue-50 px-6 py-4">
-          <div className="text-sm font-semibold text-blue-700">
-            {selectedCount} appointment{selectedCount > 1 ? "s" : ""} selected
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-              Assign Stylist
-            </button>
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-              Export
-            </button>
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-              Print
-            </button>
-            <button className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
+    <div className="overflow-visible rounded-3xl border border-slate-200 bg-white shadow-sm">
       {/* Mobile / Tablet Responsive Layout */}
-      <div className="p-4 lg:hidden">
+      <div className="p-4 xl:hidden">
         {loading ? (
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -158,13 +110,6 @@ export default function AppointmentTable({
               >
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.includes(appointment.id)}
-                      onChange={() => toggleRow(appointment.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
                     <div>
                       <p className="font-semibold text-slate-900">
                         {appointment.customer.name}
@@ -193,7 +138,7 @@ export default function AppointmentTable({
                 <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                   <p className="font-semibold text-slate-900">₹{appointment.payment.amount}</p>
                   <div onClick={(e) => e.stopPropagation()}>
-                    <AppointmentActions appointment={appointment} />
+                    <AppointmentActions appointment={appointment} onEdit={onRowClick} onAssign={onAssign} onCheckIn={onCheckIn} onStart={onStart} onComplete={onComplete} onCancel={onCancel} />
                   </div>
                 </div>
               </div>
@@ -203,18 +148,10 @@ export default function AppointmentTable({
       </div>
 
       {/* Desktop Responsive Table */}
-      <div className="hidden overflow-x-auto lg:block">
-        <table className="min-w-full">
+      <div className="hidden xl:block">
+        <table className="w-full table-fixed">
           <thead className="sticky top-0 z-20 bg-slate-50">
             <tr className="border-b border-slate-200">
-              <th className="w-12 px-6 py-4">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="h-4 w-4 rounded border-slate-300"
-                />
-              </th>
               <TableHeading title="Customer" />
               <TableHeading title="Appointment" />
               <TableHeading title="Service" />
@@ -222,7 +159,7 @@ export default function AppointmentTable({
               <TableHeading title="Schedule" />
               <TableHeading title="Amount" />
               <TableHeading title="Status" />
-              <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <th className="px-3 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Actions
               </th>
             </tr>
@@ -236,7 +173,7 @@ export default function AppointmentTable({
 
             {!loading && appointments.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-24">
+                <td colSpan={8} className="py-24">
                   <div className="flex flex-col items-center justify-center">
                     <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                       <CalendarCheck2 className="h-10 w-10" />
@@ -271,19 +208,9 @@ export default function AppointmentTable({
                   onClick={() => onRowClick?.(appointment)}
                   className="cursor-pointer border-b border-slate-100 transition-all duration-200 hover:bg-slate-50"
                 >
-                  {/* Checkbox */}
-                  <td className="px-6 py-5" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.includes(appointment.id)}
-                      onChange={() => toggleRow(appointment.id)}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                  </td>
-
                   {/* Customer */}
-                  <td className="px-6 py-5">
-                    <div className="flex items-center gap-4">
+                  <td className="px-3 py-4">
+                    <div className="flex items-center gap-3">
                       {appointment.customer.avatar ? (
                         <Image
                           src={appointment.customer.avatar}
@@ -300,7 +227,7 @@ export default function AppointmentTable({
                       )}
 
                       <div>
-                        <h4 className="font-semibold text-slate-900">
+                        <h4 className="truncate font-semibold text-slate-900">
                           {appointment.customer.name}
                         </h4>
 
@@ -314,7 +241,7 @@ export default function AppointmentTable({
                   </td>
 
                   {/* Appointment */}
-                  <td className="px-6 py-5">
+                  <td className="px-3 py-4">
                     <div>
                       <p className="font-semibold text-slate-900">
                         {appointment.appointment.appointmentNumber}
@@ -333,7 +260,7 @@ export default function AppointmentTable({
                   </td>
 
                   {/* Services */}
-                  <td className="px-6 py-5">
+                  <td className="px-3 py-4">
                     <div className="space-y-1">
                       {appointment.services.slice(0, 2).map((service) => (
                         <div
@@ -353,8 +280,8 @@ export default function AppointmentTable({
                   </td>
 
                   {/* Stylist */}
-                  <td className="px-6 py-5">
-                    <div className="flex items-center gap-3">
+                  <td className="px-3 py-4">
+                    <div className="flex items-center gap-2">
                       {appointment.stylist.avatar ? (
                         <Image
                           src={appointment.stylist.avatar}
@@ -371,7 +298,7 @@ export default function AppointmentTable({
                       )}
 
                       <div>
-                        <p className="font-medium text-slate-900">
+                        <p className="truncate font-medium text-slate-900">
                           {appointment.stylist.name}
                         </p>
 
@@ -385,7 +312,7 @@ export default function AppointmentTable({
                   </td>
 
                   {/* Schedule */}
-                  <td className="px-6 py-5">
+                  <td className="px-3 py-4">
                     <div>
                       <p className="font-medium text-slate-900">
                         {appointment.schedule.date}
@@ -402,7 +329,7 @@ export default function AppointmentTable({
                   </td>
 
                   {/* Amount */}
-                  <td className="px-6 py-5">
+                  <td className="px-3 py-4">
                     <div>
                       <p className="font-semibold text-slate-900">
                         ₹{appointment.payment.amount}
@@ -421,16 +348,16 @@ export default function AppointmentTable({
                   </td>
 
                   {/* Status */}
-                  <td className="px-6 py-5">
+                  <td className="px-3 py-4">
                     <AppointmentStatus status={appointment.status} />
                   </td>
 
                   {/* Actions */}
                   <td
-                    className="px-6 py-5 text-right"
+                    className="px-3 py-4 text-right"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <AppointmentActions appointment={appointment} />
+                    <AppointmentActions appointment={appointment} onEdit={onRowClick} onAssign={onAssign} onCheckIn={onCheckIn} onStart={onStart} onComplete={onComplete} onCancel={onCancel} />
                   </td>
                 </tr>
               ))}
@@ -452,33 +379,7 @@ export default function AppointmentTable({
           appointments
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            disabled={appointments.length === 0}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Previous
-          </button>
-
-          <button className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white">
-            1
-          </button>
-
-          <button className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-sm font-medium hover:bg-slate-50">
-            2
-          </button>
-
-          <button className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-sm font-medium hover:bg-slate-50">
-            3
-          </button>
-
-          <button
-            disabled={appointments.length === 0}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
+        <p className="text-xs text-slate-400">All matching appointments are shown.</p>
       </div>
     </div>
   );
@@ -486,14 +387,8 @@ export default function AppointmentTable({
 
 function TableHeading({ title }: { title: string }) {
   return (
-    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-      <div className="flex items-center gap-2">
-        {title}
-        <div className="flex flex-col">
-          <ChevronUp className="h-3 w-3 text-slate-300 cursor-pointer hover:text-slate-600" />
-          <ChevronDown className="-mt-1 h-3 w-3 text-slate-300 cursor-pointer hover:text-slate-600" />
-        </div>
-      </div>
+    <th className="px-3 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+      {title}
     </th>
   );
 }
@@ -501,8 +396,8 @@ function TableHeading({ title }: { title: string }) {
 function TableSkeleton() {
   return (
     <tr className="border-b border-slate-100">
-      {Array.from({ length: 9 }).map((_, index) => (
-        <td key={index} className="px-6 py-5">
+      {Array.from({ length: 8 }).map((_, index) => (
+        <td key={index} className="px-3 py-4">
           <div className="animate-pulse">
             <div className="h-4 w-24 rounded bg-slate-200" />
             <div className="mt-2 h-3 w-16 rounded bg-slate-100" />

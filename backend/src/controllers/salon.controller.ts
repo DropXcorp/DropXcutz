@@ -2,14 +2,14 @@ import type { Request, Response } from "express";
 import { prisma } from "../config/prisma";
 import { ApiError } from "../middleware/error.middleware";
 import { getSnapshot, settingsDto } from "../services/salon.service";
-import { settingsInput } from "../validators/salon.validator";
+import { settingsUpdateInput } from "../validators/salon.validator";
 import { ok, salonId } from "./http.controller";
 
 export async function bootstrap(_request: Request, response: Response) {
   ok(response, await getSnapshot(salonId(response)));
 }
 export async function updateSettings(request: Request, response: Response) {
-  const input = settingsInput.parse(request.body);
+  const input = settingsUpdateInput.parse(request.body);
   const item = await prisma.salon.update({
     where: { id: salonId(response) },
     data: {

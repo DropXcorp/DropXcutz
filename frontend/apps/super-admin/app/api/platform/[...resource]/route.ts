@@ -12,7 +12,7 @@ async function forward(request: Request, resource: string[], method: string) {
         "content-type": "application/json",
         cookie: request.headers.get("cookie") ?? "",
       },
-      ...(method !== "GET" ? { body: await request.text() } : {}),
+      ...(method !== "GET" && method !== "DELETE" ? { body: await request.text() } : {}),
     },
   );
   return new NextResponse(await response.text(), {
@@ -21,9 +21,38 @@ async function forward(request: Request, resource: string[], method: string) {
   });
 }
 
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ resource: string[] }> },
+) {
+  return forward(request, (await params).resource, "GET");
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ resource: string[] }> },
+) {
+  return forward(request, (await params).resource, "POST");
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ resource: string[] }> },
+) {
+  return forward(request, (await params).resource, "PUT");
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ resource: string[] }> },
 ) {
   return forward(request, (await params).resource, "PATCH");
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ resource: string[] }> },
+) {
+  return forward(request, (await params).resource, "DELETE");
+}
+

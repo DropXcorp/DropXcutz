@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
+import { Toaster, toast } from "sonner";
 import { useERPStore, type ERPUser, type ERPSalon } from "@/src/lib/erp-store";
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
 export default function ERPBootstrap({
@@ -15,6 +16,18 @@ export default function ERPBootstrap({
   const [signedIn, setSignedIn] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!error) return;
+    toast.error(error);
+    clearError();
+  }, [error, clearError]);
+  const successMessage = useERPStore((state) => state.successMessage);
+  const clearSuccess = useERPStore((state) => state.clearSuccess);
+  useEffect(() => {
+    if (!successMessage) return;
+    toast.success(successMessage);
+    clearSuccess();
+  }, [successMessage, clearSuccess]);
   useEffect(() => {
     fetch(`${api}/erp/auth/me`, { credentials: "include" })
       .then(async (response) => {
@@ -228,10 +241,26 @@ export default function ERPBootstrap({
     );
   return (
     <>
+      <Toaster position="top-right" richColors closeButton />
       {error && (
-        <div className="flex items-center justify-between bg-red-600 px-4 py-2 text-sm text-white">
-          <span>{error}</span>
-          <button type="button" onClick={clearError} aria-label="Dismiss error">
+        <div className="flex items-center justify-between bg-red-600 px-4 py-2 text-sm text-white shadow-sm">
+          <div className="flex items-center gap-3">
+            <span>{error}</span>
+            {error.includes("unavailable") || error.includes("session") || error.includes("Sign in") ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  await fetch(`${api}/erp/auth/logout`, { method: "POST", credentials: "include" });
+                  setSignedIn(false);
+                  clearError();
+                }}
+                className="rounded bg-white/20 px-2 py-0.5 text-xs font-semibold text-white hover:bg-white/30 transition"
+              >
+                Sign In Again
+              </button>
+            ) : null}
+          </div>
+          <button type="button" onClick={clearError} aria-label="Dismiss error" className="hover:opacity-80">
             <X className="h-4 w-4" />
           </button>
         </div>

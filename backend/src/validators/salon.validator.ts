@@ -4,6 +4,10 @@ const requiredText = z.string().trim().min(1).max(200);
 const optionalText = z.string().trim().max(5000).optional().nullable();
 const money = z.coerce.number().finite().min(0).max(999_999_999.99);
 const nonNegativeInt = z.coerce.number().int().min(0);
+const optionalEmail = z.preprocess(
+  (value) => (value == null || (typeof value === "string" && value.trim() === "") ? undefined : value),
+  z.string().trim().email().max(200).optional().nullable(),
+);
 const slug = (value: string) =>
   value
     .trim()
@@ -26,7 +30,7 @@ const salonCode = z
 export const customerInput = z.object({
   name: requiredText,
   phone: z.string().trim().min(5).max(30),
-  email: z.string().trim().email().max(200).optional().nullable(),
+  email: optionalEmail,
   membership: z.enum(["Standard", "Silver", "Gold"]).default("Standard"),
   points: nonNegativeInt.optional(),
   totalSpend: money.optional(),
@@ -39,7 +43,7 @@ export const employeeInput = z.object({
   name: requiredText,
   role: requiredText,
   phone: z.string().trim().min(5).max(30),
-  email: z.string().trim().email().max(200).optional().nullable(),
+  email: optionalEmail,
   baseSalary: money,
   commissionRate: z.coerce.number().finite().min(0).max(100).default(10),
   active: z.boolean().default(true),
@@ -76,7 +80,7 @@ const appointmentService = z.object({
 });
 
 export const appointmentInput = z.object({
-  customer: z.object({ id: z.string().min(1), name: requiredText }),
+  customer: z.object({ id: z.string().min(1), name: requiredText, phone: z.string().trim().min(5).optional() }),
   stylist: z.object({ id: z.string().min(1), name: z.string().optional() }),
   appointment: z.object({
     appointmentNumber: z.string().trim().max(40).optional(),
@@ -163,6 +167,11 @@ export const settingsInput = z.object({
   lowStockAlerts: z.boolean(),
   dailyRevenueDigest: z.boolean(),
 });
+
+// A salon administrator's password belongs to the User record, not Salon.
+// Keep it in the platform-create validator only; ERP settings must be editable
+// without sending or attempting to persist a password.
+export const settingsUpdateInput = settingsInput.omit({ adminPassword: true });
 
 export const salonCreateInput = settingsInput.extend({
   code: salonCode,

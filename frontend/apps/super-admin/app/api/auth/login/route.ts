@@ -11,7 +11,9 @@ export async function POST(request: Request) {
     status: response.status,
     headers: { "content-type": "application/json" },
   });
-  const cookie = response.headers.get("set-cookie");
-  if (cookie) result.headers.set("set-cookie", cookie);
+  const cookies = typeof response.headers.getSetCookie === "function"
+    ? response.headers.getSetCookie()
+    : (response.headers.get("set-cookie") ? [response.headers.get("set-cookie") as string] : []);
+  for (const cookie of cookies) result.headers.append("set-cookie", cookie);
   return result;
 }

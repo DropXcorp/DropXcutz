@@ -21,6 +21,7 @@ interface AppointmentActionsProps {
 
   onView?: (appointment: AppointmentTableItem) => void;
   onEdit?: (appointment: AppointmentTableItem) => void;
+  onAssign?: (appointment: AppointmentTableItem) => void;
   onCheckIn?: (appointment: AppointmentTableItem) => void;
   onStart?: (appointment: AppointmentTableItem) => void;
   onComplete?: (appointment: AppointmentTableItem) => void;
@@ -34,6 +35,7 @@ export default function AppointmentActions({
   appointment,
   onView,
   onEdit,
+  onAssign,
   onCheckIn,
   onStart,
   onComplete,
@@ -74,6 +76,7 @@ export default function AppointmentActions({
   return (
     <div className="relative" ref={menuRef}>
       <button
+        type="button"
         onClick={() => setOpen(!open)}
         className="rounded-xl p-2 transition hover:bg-slate-100"
       >
@@ -92,65 +95,18 @@ export default function AppointmentActions({
             </p>
           </div>
 
-          <MenuItem
-            icon={Eye}
-            label="View Details"
-            onClick={() => close(() => onView?.(appointment))}
-          />
-
-          <MenuItem
-            icon={Pencil}
-            label="Edit Appointment"
-            onClick={() => close(() => onEdit?.(appointment))}
-          />
-
-          <MenuItem
-            icon={UserCheck}
-            label="Check In"
-            onClick={() => close(() => onCheckIn?.(appointment))}
-          />
-
-          <MenuItem
-            icon={Play}
-            label="Start Service"
-            onClick={() => close(() => onStart?.(appointment))}
-          />
-
-          <MenuItem
-            icon={CheckCircle2}
-            label="Complete Appointment"
-            onClick={() => close(() => onComplete?.(appointment))}
-          />
-
-          <div className="my-1 border-t border-slate-100" />
-
-          <MenuItem
-            icon={Printer}
-            label="Print Invoice"
-            onClick={() => close(() => onPrint?.(appointment))}
-          />
-
-          <MenuItem
-            icon={Copy}
-            label="Duplicate"
-            onClick={() => close(() => onDuplicate?.(appointment))}
-          />
-
-          <div className="my-1 border-t border-slate-100" />
-
-          <MenuItem
-            icon={XCircle}
-            label="Cancel Appointment"
-            danger
-            onClick={() => close(() => onCancel?.(appointment))}
-          />
-
-          <MenuItem
-            icon={Trash2}
-            label="Delete Appointment"
-            danger
-            onClick={() => close(() => onDelete?.(appointment))}
-          />
+          {onView && <MenuItem icon={Eye} label="View Details" onClick={() => close(() => onView(appointment))} />}
+          {onAssign && <MenuItem icon={UserCheck} label="Assign Stylist" onClick={() => close(() => onAssign(appointment))} />}
+          {onEdit && <MenuItem icon={Pencil} label="Edit Appointment" onClick={() => close(() => onEdit(appointment))} />}
+          {onCheckIn && <MenuItem icon={UserCheck} label="Check In" onClick={() => close(() => onCheckIn(appointment))} />}
+          {onStart && <MenuItem icon={Play} label="Start Service" onClick={() => close(() => onStart(appointment))} />}
+          {onComplete && <MenuItem icon={CheckCircle2} label="Complete Appointment" onClick={() => close(() => onComplete(appointment))} />}
+          {(onPrint || onDuplicate) && <div className="my-1 border-t border-slate-100" />}
+          {onPrint && <MenuItem icon={Printer} label="Print Invoice" onClick={() => close(() => onPrint(appointment))} />}
+          {onDuplicate && <MenuItem icon={Copy} label="Duplicate" onClick={() => close(() => onDuplicate(appointment))} />}
+          {(onCancel || onDelete) && <div className="my-1 border-t border-slate-100" />}
+          {onCancel && <MenuItem icon={XCircle} label="Cancel Appointment" danger onClick={() => close(() => onCancel(appointment))} />}
+          {onDelete && <MenuItem icon={Trash2} label="Delete Appointment" danger onClick={() => close(() => onDelete(appointment))} />}
         </div>
       )}
     </div>
@@ -172,6 +128,7 @@ function MenuItem({
 }: MenuItemProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`flex w-full items-center gap-3 px-4 py-3 text-left transition
         ${

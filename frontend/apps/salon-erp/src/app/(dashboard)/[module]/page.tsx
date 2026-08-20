@@ -13,6 +13,15 @@ const modules = [
   "notifications",
   "settings",
   "profile",
+  "branches",
+  "attendance",
+  "expenses",
+  "suppliers",
+  "packages",
+  "coupons",
+  "reviews",
+  "memberships",
+  "purchase-orders",
 ] as const;
 
 export function generateStaticParams() {

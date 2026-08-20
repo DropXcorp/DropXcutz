@@ -61,9 +61,10 @@ export async function updateInvoice(request: Request, response: Response) {
     await assertOwned("customer", input.customerId, currentSalonId);
   if (input.appointmentId)
     await assertOwned("appointment", input.appointmentId, currentSalonId);
-  const item = await prisma.invoice.update({
-    where: { id },
-    data: {
+  const item = await prisma.$transaction(async (client) => {
+    const item = await client.invoice.update({
+      where: { id },
+      data: {
       ...(input.customerId !== undefined && { customerId: input.customerId }),
       ...(input.appointmentId !== undefined && {
         appointmentId: input.appointmentId || null,
@@ -82,7 +83,18 @@ export async function updateInvoice(request: Request, response: Response) {
         amountPaid: input.status === "Paid" ? input.amount : 0,
       }),
       ...(input.notes !== undefined && { notes: input.notes || null }),
-    },
+      },
+    });
+    if (item.appointmentId && input.status !== undefined) {
+      await client.appointment.update({
+        where: { id: item.appointmentId },
+        data: {
+          amountPaid: input.status === "Paid" ? (input.amount ?? Number(item.totalAmount)) : 0,
+          paymentStatus: ({ Paid: "PAID", Pending: "PENDING", "Partially Paid": "PARTIALLY_PAID", Refunded: "REFUNDED" }[input.status] as any),
+        },
+      });
+    }
+    return item;
   });
   ok(response, invoiceDto(item));
 }

@@ -16,6 +16,7 @@ type SupplierInput = ReturnType<typeof supplierInput.parse>;
 const dto = (item: any) => ({
   id: item.id,
   name: item.name,
+  contactPerson: item.contactPerson,
   phone: item.phone,
   email: item.email,
   gstNumber: item.gstNumber,
@@ -30,6 +31,7 @@ const dto = (item: any) => ({
 
 const data = (input: Partial<SupplierInput>): Prisma.SupplierUpdateInput => ({
   ...(input.name !== undefined && { name: input.name }),
+  ...(input.contactPerson !== undefined && { contactPerson: input.contactPerson || null }),
   ...(input.phone !== undefined && { phone: input.phone || null }),
   ...(input.email !== undefined && { email: input.email || null }),
   ...(input.gstNumber !== undefined && { gstNumber: input.gstNumber || null }),

@@ -1,14 +1,17 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Search, X } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import MobileSidebar from "@/src/components/layout/MobileSidebar";
 import { useERPStore } from "@/src/lib/erp-store";
 
 export default function AppHeader() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const user = useERPStore((state) => state.currentUser);
+  const salon = useERPStore((state) => state.currentSalon);
   const notifications = useERPStore((state) => state.notifications);
   const refresh = useERPStore((state) => state.refresh);
   const markNotificationRead = useERPStore((state) => state.markNotificationRead);
@@ -25,13 +28,26 @@ export default function AppHeader() {
     await markNotificationRead(id);
   }
 
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api"}/erp/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } finally {
+      window.location.assign("/");
+    }
+  }
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-zinc-200 bg-white px-4 md:px-6">
       <div className="flex items-center gap-3">
         <MobileSidebar />
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900">Dashboard</h1>
-          <p className="hidden text-sm text-zinc-500 md:block">Welcome back</p>
+          <h1 className="text-xl font-semibold text-zinc-900">{salon?.name ?? "Salon ERP"}</h1>
+          <p className="hidden text-sm text-zinc-500 md:block">{user ? `Welcome back, ${user.name}` : "Salon workspace"}</p>
         </div>
       </div>
       <div className="flex items-center gap-3">
@@ -53,7 +69,20 @@ export default function AppHeader() {
             )}
           </AnimatePresence>
         </div>
-        <button type="button" aria-label={`Signed in as ${user?.name ?? "user"}`} className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-sm font-semibold text-white transition hover:bg-zinc-800">{initial}</button>
+        <div className="relative">
+          <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen} aria-label={`Signed in as ${user?.name ?? "user"}`} className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-1.5 pr-2 transition hover:bg-zinc-100">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-black text-xs font-semibold text-white">{initial}</span>
+            <ChevronDown className="h-4 w-4 text-zinc-500" />
+          </button>
+          <AnimatePresence>
+            {accountOpen && (
+              <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} className="absolute right-0 top-12 w-64 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-2 shadow-xl">
+                <div className="border-b border-zinc-100 px-3 py-2.5"><p className="truncate text-sm font-semibold text-zinc-900">{user?.name ?? "Salon user"}</p><p className="truncate text-xs text-zinc-500">{user?.email ?? ""}</p><p className="mt-1 truncate text-xs font-medium text-zinc-700">{salon?.name ?? "No salon assigned"}</p></div>
+                <button type="button" onClick={() => void logout()} disabled={loggingOut} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"><LogOut className="h-4 w-4" />{loggingOut ? "Signing out…" : "Log out"}</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </header>
   );

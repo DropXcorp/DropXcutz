@@ -1,10 +1,15 @@
 import { z } from "zod";
 const optional = (max: number) =>
   z.string().trim().max(max).optional().nullable();
+const optionalEmail = z.preprocess(
+  (value) => (value == null || (typeof value === "string" && value.trim() === "") ? undefined : value),
+  z.string().trim().email().max(200).optional().nullable(),
+);
 export const supplierInput = z.object({
   name: z.string().trim().min(1).max(160),
+  contactPerson: optional(160),
   phone: optional(30),
-  email: z.string().trim().email().max(200).optional().nullable(),
+  email: optionalEmail,
   gstNumber: optional(20),
   address: optional(5000),
   city: optional(100),

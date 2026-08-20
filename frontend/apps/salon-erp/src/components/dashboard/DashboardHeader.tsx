@@ -21,7 +21,7 @@ export default function DashboardHeader() {
       <div>
         <div className="flex items-center gap-2">
           <Sun className="h-6 w-6 text-yellow-500" />
-          <h1 className="text-3xl font-bold text-zinc-900">{greeting} ðŸ‘‹</h1>
+          <h1 className="text-3xl font-bold text-zinc-900">{greeting} 👋</h1>
         </div>
         <p className="mt-2 text-zinc-500">
           Welcome back! Here&apos;s what&apos;s happening in your salon today.
