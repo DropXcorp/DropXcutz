@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import Image from "next/image";
 import {
   Activity,
   ArrowUpRight,
@@ -154,8 +155,8 @@ export const tones: Record<Status, string> = {
 export function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-900 text-white shadow-md">
-        <span className="text-lg font-bold">DX</span>
+      <div className="relative h-10 w-10 overflow-hidden rounded-xl bg-transparent">
+        <Image src="/logo.png" alt="DropXcutz logo" fill sizes="40px" className="object-cover" priority />
       </div>
       <div>
         <b className="text-base text-zinc-950 font-bold">DropXCutz</b>

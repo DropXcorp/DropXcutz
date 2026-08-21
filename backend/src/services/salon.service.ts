@@ -193,6 +193,18 @@ export const customerDto = (customer: any) => ({
   points: customer.points,
   totalSpend: toNumber(customer.totalSpend),
 });
+
+/** Keep the denormalized customer spend in sync with paid invoices. */
+export async function refreshCustomerSpend(client: any, customerId: string) {
+  const paid = await client.invoice.aggregate({
+    where: { customerId, status: "PAID" },
+    _sum: { totalAmount: true },
+  });
+  await client.customer.update({
+    where: { id: customerId },
+    data: { totalSpend: paid._sum.totalAmount ?? 0 },
+  });
+}
 export const employeeDto = (employee: any) => ({
   id: employee.id,
   name: employee.name,
@@ -522,6 +534,7 @@ export async function createInvoice(salonId: string, input: any) {
         data: { amountPaid: input.status === "Paid" ? input.amount : 0, paymentStatus: paymentStatusToDb[input.status as keyof typeof paymentStatusToDb] },
       });
     }
+    if (input.status === "Paid") await refreshCustomerSpend(client, input.customerId);
     return created;
   });
   return invoiceDto(invoice);

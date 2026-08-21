@@ -10,6 +10,7 @@ export default function ERPBootstrap({
 }: {
   children: React.ReactNode;
 }) {
+
   const { hydrate, loading, hydrated, error, clearError, setIdentity } =
     useERPStore();
   const [ready, setReady] = useState(false);
@@ -168,6 +169,7 @@ export default function ERPBootstrap({
       </div>
     );
   if (!signedIn)
+     // hello
     return (
       <main className="grid min-h-screen place-items-center bg-zinc-100 px-4 py-8">
         <motion.form
