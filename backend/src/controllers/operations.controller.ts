@@ -6,6 +6,7 @@ import {
   createPayroll,
   invoiceDto,
   payrollDto,
+  refreshCustomerSpend,
   saveAppointment,
 } from "../services/salon.service";
 import {
@@ -62,6 +63,10 @@ export async function updateInvoice(request: Request, response: Response) {
   if (input.appointmentId)
     await assertOwned("appointment", input.appointmentId, currentSalonId);
   const item = await prisma.$transaction(async (client) => {
+    const previous = await client.invoice.findUniqueOrThrow({
+      where: { id },
+      select: { customerId: true },
+    });
     const item = await client.invoice.update({
       where: { id },
       data: {
@@ -94,6 +99,9 @@ export async function updateInvoice(request: Request, response: Response) {
         },
       });
     }
+    await refreshCustomerSpend(client, previous.customerId);
+    if (item.customerId !== previous.customerId)
+      await refreshCustomerSpend(client, item.customerId);
     return item;
   });
   ok(response, invoiceDto(item));
@@ -101,7 +109,14 @@ export async function updateInvoice(request: Request, response: Response) {
 export async function deleteInvoice(request: Request, response: Response) {
   const id = String(request.params.id);
   await assertOwned("invoice", id, salonId(response));
-  await prisma.invoice.delete({ where: { id } });
+  await prisma.$transaction(async (client) => {
+    const invoice = await client.invoice.findUniqueOrThrow({
+      where: { id },
+      select: { customerId: true },
+    });
+    await client.invoice.delete({ where: { id } });
+    await refreshCustomerSpend(client, invoice.customerId);
+  });
   response.status(204).end();
 }
 export async function createPayrollController(

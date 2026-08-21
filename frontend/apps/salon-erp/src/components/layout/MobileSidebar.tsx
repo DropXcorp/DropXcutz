@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import AppSidebar from "./AppSidebar";
 import { useERPStore } from "@/src/lib/erp-store";
+import Image from "next/image";
 
 export default function MobileSidebar() {
   const [open, setOpen] = useState(false);
@@ -37,8 +38,8 @@ export default function MobileSidebar() {
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-5">
           <div className="flex items-center gap-4">
             {/* Logo */}
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-black to-zinc-800 text-2xl font-bold text-white shadow-lg">
-              DX
+            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-transparent">
+              <Image src="/logo.png" alt="DropXcutz logo" fill sizes="64px" className="object-cover" priority />
             </div>
 
             {/* Branding */}
