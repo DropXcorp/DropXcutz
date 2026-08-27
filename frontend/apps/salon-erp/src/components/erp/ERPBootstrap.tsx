@@ -169,7 +169,6 @@ export default function ERPBootstrap({
       </div>
     );
   if (!signedIn)
-     // hello
     return (
       <main className="grid min-h-screen place-items-center bg-zinc-100 px-4 py-8">
         <motion.form

@@ -22,6 +22,7 @@ export type Employee = {
   email?: string | null;
   baseSalary: number;
   active: boolean;
+  isBookable?: boolean;
 };
 
 export type Service = {
@@ -29,6 +30,7 @@ export type Service = {
   name: string;
   price: number;
   durationMinutes: number;
+  isPublic?: boolean;
   stockItemId?: string;
   description?: string;
 };
@@ -219,6 +221,9 @@ type Snapshot = {
   payroll: PayrollRun[];
   notifications: Notification[];
   settings: SalonSettings;
+  subscription: { plan: string; status: string; expiresAt: string | null } | null;
+  features: string[];
+  website: { type: string } | null;
 };
 
 type ERPState = Snapshot & {
@@ -233,6 +238,9 @@ type ERPState = Snapshot & {
   purchaseOrders: PurchaseOrder[];
   currentUser: ERPUser | null;
   currentSalon: ERPSalon | null;
+  subscription: Snapshot["subscription"];
+  features: string[];
+  website: Snapshot["website"];
   loading: boolean;
   hydrated: boolean;
   error: string | null;
@@ -420,6 +428,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
   purchaseOrders: [],
   currentUser: null,
   currentSalon: null,
+  subscription: null,
+  features: [],
+  website: null,
   loading: true,
   hydrated: false,
   error: null,

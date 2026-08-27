@@ -7,6 +7,9 @@ import {
   salonPatchInput,
 } from "../validators/salon.validator";
 import { created, ok } from "./http.controller";
+import { getEffectiveFeatures } from "../services/feature.service";
+import { planFeaturesInput, planInput, salonFeatureInput, subscriptionInput, websiteSettingsInput } from "../validators/plan.validator";
+import { notificationInput, platformSettingsInput, platformUserCreateInput, platformUserPatchInput } from "../validators/platform.validator";
 
 export async function listSalons(_request: Request, response: Response) {
   const salons = await prisma.salon.findMany({
@@ -61,6 +64,7 @@ export async function createSalon(request: Request, response: Response) {
     const salon = await tx.salon.create({
       data: {
         ...salonInput,
+        slug: input.slug ?? input.code,
         email: normalizedEmail,
         gstin: input.gstin || null,
         logoUrl: input.logoUrl || null,
@@ -81,6 +85,11 @@ export async function createSalon(request: Request, response: Response) {
         role: "SALON_ADMIN",
       },
     });
+    const plan = await tx.plan.findFirst({ where: { name: { equals: salon.subscriptionPlan, mode: "insensitive" } } });
+    if (plan) {
+      await tx.salon.update({ where: { id: salon.id }, data: { planId: plan.id } });
+      await tx.subscription.create({ data: { salonId: salon.id, planId: plan.id, status: salon.status === "TRIAL" ? "TRIAL" : "ACTIVE", expiresAt: salon.trialEndsAt } });
+    }
     return salon;
   });
   await audit(
@@ -94,16 +103,7 @@ export async function createSalon(request: Request, response: Response) {
 }
 
 export async function sendNotification(request: Request, response: Response) {
-  const target = String(request.body?.salonId ?? "").trim();
-  const title = String(request.body?.title ?? "").trim();
-  const message = String(request.body?.message ?? "").trim();
-  if (!target || !title || !message) {
-    throw new ApiError(400, "Salon, title and message are required.");
-  }
-  if (title.length > 160)
-    throw new ApiError(400, "Title must be 160 characters or fewer.");
-  if (message.length > 5000)
-    throw new ApiError(400, "Message must be 5000 characters or fewer.");
+  const { salonId: target, title, message } = notificationInput.parse(request.body);
   const salons =
     target === "all"
       ? await prisma.salon.findMany({
@@ -138,7 +138,18 @@ export async function updateSalon(request: Request, response: Response) {
   const input = salonPatchInput.parse(request.body);
   const current = await prisma.salon.findUnique({ where: { id } });
   if (!current) throw new ApiError(404, "Salon not found.");
-  const item = await prisma.salon.update({ where: { id }, data: input });
+  const item = await prisma.$transaction(async (tx) => {
+    const updated = await tx.salon.update({ where: { id }, data: input });
+    if (input.subscriptionPlan !== undefined) {
+      const plan = await tx.plan.findFirst({ where: { name: { equals: input.subscriptionPlan, mode: "insensitive" } } });
+      if (!plan) throw new ApiError(400, "Select a valid configured plan.");
+      await tx.salon.update({ where: { id }, data: { planId: plan.id, subscriptionPlan: plan.name } });
+      const currentSubscription = await tx.subscription.findFirst({ where: { salonId: id }, orderBy: { createdAt: "desc" } });
+      if (currentSubscription) await tx.subscription.update({ where: { id: currentSubscription.id }, data: { planId: plan.id } });
+      else await tx.subscription.create({ data: { salonId: id, planId: plan.id, status: updated.status === "TRIAL" ? "TRIAL" : "ACTIVE", expiresAt: updated.trialEndsAt } });
+    }
+    return updated;
+  });
   await audit(
     response.locals.user?.id,
     "SALON_UPDATED",
@@ -250,18 +261,7 @@ export async function listPlatformUsers(_request: Request, response: Response) {
 }
 
 export async function createPlatformUser(request: Request, response: Response) {
-  const name = String(request.body?.name ?? "").trim();
-  const email = String(request.body?.email ?? "").trim().toLowerCase();
-  const password = String(request.body?.password ?? "");
-  const role = String(request.body?.role ?? "PLATFORM_ADMIN");
-  const salonId = request.body?.salonId ? String(request.body.salonId) : null;
-
-  if (!name || !email || !password) {
-    throw new ApiError(400, "Name, email and password are required.");
-  }
-  if (password.length < 8) {
-    throw new ApiError(400, "Password must be at least 8 characters.");
-  }
+  const { name, email, password, role, salonId = null } = platformUserCreateInput.parse(request.body);
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -295,14 +295,17 @@ export async function createPlatformUser(request: Request, response: Response) {
 
 export async function updatePlatformUser(request: Request, response: Response) {
   const id = String(request.params.id);
-  const active = request.body?.active;
-  const newPassword = request.body?.newPassword;
-  const role = request.body?.role;
-  const name = request.body?.name;
+  const { active, newPassword, role, name, salonId } = platformUserPatchInput.parse(request.body);
+  const current = await prisma.user.findUniqueOrThrow({ where: { id }, select: { role: true, salonId: true } });
+  const nextRole = role ?? current.role;
+  const nextSalonId = salonId === undefined ? current.salonId : salonId;
+  if (nextRole !== "PLATFORM_ADMIN" && !nextSalonId)
+    throw new ApiError(400, "Salon users must be assigned to a salon.");
 
   const data: Record<string, any> = {};
   if (typeof active === "boolean") data.active = active;
   if (typeof role === "string") data.role = role;
+  if (salonId !== undefined) data.salonId = salonId;
   if (typeof name === "string" && name.trim()) data.name = name.trim();
   if (typeof newPassword === "string" && newPassword.length >= 8) {
     data.passwordHash = await bcrypt.hash(newPassword, 12);
@@ -386,7 +389,7 @@ export async function updatePlatformSettings(
   request: Request,
   response: Response,
 ) {
-  const input = request.body ?? {};
+  const input = platformSettingsInput.parse(request.body);
   const data = {
     ...(typeof input.platformName === "string" && {
       platformName: input.platformName.trim().slice(0, 160),
@@ -416,5 +419,117 @@ export async function updatePlatformSettings(
     "platform",
   );
   ok(response, settings);
+}
+
+export async function listPlans(_request: Request, response: Response) {
+  ok(response, await prisma.plan.findMany({ include: { features: { include: { feature: true } }, _count: { select: { subscriptions: true } } }, orderBy: { name: "asc" } }));
+}
+
+export async function getPlan(request: Request, response: Response) {
+  const plan = await prisma.plan.findUnique({ where: { id: String(request.params.id) }, include: { features: { include: { feature: true } } } });
+  if (!plan) throw new ApiError(404, "Plan not found.");
+  ok(response, plan);
+}
+
+export async function createPlan(request: Request, response: Response) {
+  const input = planInput.parse(request.body);
+  const plan = await prisma.plan.create({ data: input });
+  await audit(response.locals.user?.id, "PLAN_CREATED", "PLAN", plan.id, { code: plan.code });
+  created(response, plan);
+}
+
+export async function updatePlan(request: Request, response: Response) {
+  const input = planInput.partial().parse(request.body);
+  const plan = await prisma.plan.update({ where: { id: String(request.params.id) }, data: input });
+  await audit(response.locals.user?.id, "PLAN_UPDATED", "PLAN", plan.id, input);
+  ok(response, plan);
+}
+
+export async function setPlanFeatures(request: Request, response: Response) {
+  const planId = String(request.params.id);
+  const { featureCodes } = planFeaturesInput.parse(request.body);
+  await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+  const features = await prisma.feature.findMany({ where: { code: { in: featureCodes } } });
+  if (features.length !== new Set(featureCodes).size) throw new ApiError(400, "One or more feature codes are invalid.");
+  await prisma.$transaction([
+    prisma.planFeature.deleteMany({ where: { planId } }),
+    prisma.planFeature.createMany({ data: features.map((feature) => ({ planId, featureId: feature.id, enabled: true })) }),
+  ]);
+  await audit(response.locals.user?.id, "PLAN_FEATURES_UPDATED", "PLAN", planId, { featureCodes });
+  ok(response, await prisma.plan.findUnique({ where: { id: planId }, include: { features: { include: { feature: true } } } }));
+}
+
+export async function listFeatures(_request: Request, response: Response) {
+  ok(response, await prisma.feature.findMany({ orderBy: { code: "asc" } }));
+}
+
+export async function getSalonSubscription(request: Request, response: Response) {
+  const salonId = String(request.params.id);
+  ok(response, await prisma.subscription.findFirst({ where: { salonId }, orderBy: { createdAt: "desc" }, include: { plan: true } }));
+}
+
+export async function createSubscription(request: Request, response: Response) {
+  const salonId = String(request.params.id); const input = subscriptionInput.parse(request.body);
+  await prisma.salon.findUniqueOrThrow({ where: { id: salonId } });
+  const subscription = await prisma.$transaction(async (tx) => {
+    const createdSubscription = await tx.subscription.create({ data: { salonId, ...input } });
+    await tx.salon.update({ where: { id: salonId }, data: { planId: input.planId, subscriptionPlan: (await tx.plan.findUniqueOrThrow({ where: { id: input.planId } })).name } });
+    return createdSubscription;
+  });
+  await audit(response.locals.user?.id, "SUBSCRIPTION_CREATED", "SUBSCRIPTION", subscription.id, { salonId, planId: input.planId });
+  created(response, subscription);
+}
+
+export async function updateSubscription(request: Request, response: Response) {
+  const salonId = String(request.params.id); const input = subscriptionInput.partial().parse(request.body);
+  const current = await prisma.subscription.findFirst({ where: { salonId }, orderBy: { createdAt: "desc" } });
+  if (!current) throw new ApiError(404, "Subscription not found.");
+  const subscription = await prisma.subscription.update({ where: { id: current.id }, data: input });
+  if (input.planId) {
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: input.planId } });
+    await prisma.salon.update({ where: { id: salonId }, data: { planId: plan.id, subscriptionPlan: plan.name } });
+  }
+  await audit(response.locals.user?.id, "SUBSCRIPTION_UPDATED", "SUBSCRIPTION", subscription.id, input);
+  ok(response, subscription);
+}
+
+export async function renewSubscription(request: Request, response: Response) {
+  const salonId = String(request.params.id);
+  const input = subscriptionInput.parse(request.body);
+  const subscription = await prisma.$transaction(async (tx) => {
+    const plan = await tx.plan.findUniqueOrThrow({ where: { id: input.planId } });
+    await tx.subscription.updateMany({ where: { salonId, status: { in: ["ACTIVE", "TRIAL"] } }, data: { status: "EXPIRED", expiresAt: new Date() } });
+    const renewed = await tx.subscription.create({ data: { salonId, ...input, status: "ACTIVE", startsAt: input.startsAt ?? new Date() } });
+    await tx.salon.update({ where: { id: salonId }, data: { planId: plan.id, subscriptionPlan: plan.name, status: "ACTIVE" } });
+    return renewed;
+  });
+  await audit(response.locals.user?.id, "SUBSCRIPTION_RENEWED", "SUBSCRIPTION", subscription.id, { salonId, planId: input.planId });
+  created(response, subscription);
+}
+
+export async function getSalonFeatureOverrides(request: Request, response: Response) {
+  const salonId = String(request.params.id);
+  ok(response, await getEffectiveFeatures(salonId));
+}
+
+export async function setSalonFeatureOverride(request: Request, response: Response) {
+  const salonId = String(request.params.id); const { code, enabled } = salonFeatureInput.parse(request.body);
+  const feature = await prisma.feature.findUnique({ where: { code } }); if (!feature) throw new ApiError(404, "Feature not found.");
+  await prisma.salonFeature.upsert({ where: { salonId_featureId: { salonId, featureId: feature.id } }, create: { salonId, featureId: feature.id, enabled }, update: { enabled } });
+  await audit(response.locals.user?.id, "FEATURE_OVERRIDE_SET", "SALON", salonId, { code, enabled });
+  ok(response, await getEffectiveFeatures(salonId));
+}
+
+export async function getSalonWebsiteSettings(request: Request, response: Response) {
+  ok(response, await prisma.salonWebsiteSettings.findUnique({ where: { salonId: String(request.params.id) } }));
+}
+
+export async function upsertSalonWebsiteSettings(request: Request, response: Response) {
+  const salonId = String(request.params.id); const input = websiteSettingsInput.parse(request.body);
+  const { theme, ...rest } = input;
+  const data = { ...rest, ...(theme !== undefined ? { theme: JSON.parse(JSON.stringify(theme)) } : {}) };
+  const website = await prisma.salonWebsiteSettings.upsert({ where: { salonId }, create: { salonId, ...data }, update: data });
+  await audit(response.locals.user?.id, "WEBSITE_SETTINGS_UPDATED", "SALON", salonId, { type: input.type });
+  ok(response, website);
 }
 

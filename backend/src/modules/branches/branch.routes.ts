@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireSalonAdmin } from "../../middleware/session.middleware";
+import { requireFeature } from "../../middleware/feature.middleware";
 import {
   activateBranch,
   createBranch,
@@ -19,6 +20,7 @@ import {
  *   delete: { summary: Delete a branch, tags: [Branches] }
  */
 export const branchRouter = Router();
+branchRouter.use(requireFeature("MULTI_BRANCH"));
 branchRouter.get("/", listBranches);
 branchRouter.get("/:id", getBranch);
 branchRouter.post("/", requireSalonAdmin, createBranch);

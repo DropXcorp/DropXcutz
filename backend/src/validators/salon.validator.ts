@@ -47,6 +47,7 @@ export const employeeInput = z.object({
   baseSalary: money,
   commissionRate: z.coerce.number().finite().min(0).max(100).default(10),
   active: z.boolean().default(true),
+  isBookable: z.boolean().default(true),
 });
 
 export const employeePatch = employeeInput.partial();
@@ -70,6 +71,7 @@ export const serviceInput = z.object({
   stockItemId: z.string().trim().optional().nullable(),
   inventoryQuantity: z.coerce.number().int().min(1).default(1),
   active: z.boolean().default(true),
+  isPublic: z.boolean().default(true),
 });
 
 export const servicePatch = serviceInput.partial();
@@ -84,7 +86,7 @@ export const appointmentInput = z.object({
   stylist: z.object({ id: z.string().min(1), name: z.string().optional() }),
   appointment: z.object({
     appointmentNumber: z.string().trim().max(40).optional(),
-    source: z.enum(["Walk-in", "Online", "Phone"]).default("Walk-in"),
+    source: z.enum(["ERP", "Walk-in", "Online", "Phone", "WhatsApp"]).default("Walk-in"),
   }),
   services: z.array(appointmentService).min(1),
   schedule: z.object({
@@ -175,6 +177,7 @@ export const settingsUpdateInput = settingsInput.omit({ adminPassword: true });
 
 export const salonCreateInput = settingsInput.extend({
   code: salonCode,
+  slug: salonCode.optional(),
   status: z.enum(["TRIAL", "ACTIVE", "SUSPENDED", "ARCHIVED"]).default("TRIAL"),
   subscriptionPlan: z.string().trim().min(1).max(60).default("Starter"),
   trialEndsAt: z.coerce.date().optional().nullable(),

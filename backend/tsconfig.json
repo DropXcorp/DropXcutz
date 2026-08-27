@@ -22,6 +22,7 @@
     "src/services/**/*.ts",
     "src/modules/**/*.ts",
     "src/validators/**/*.ts",
-    "prisma/seed.ts"
+    "prisma/seed.ts",
+    "tests/**/*.ts"
   ]
 }

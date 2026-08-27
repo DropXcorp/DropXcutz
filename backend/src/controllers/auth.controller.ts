@@ -5,6 +5,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../config/prisma";
 import { ApiError } from "../middleware/error.middleware";
 import { salonId, ok } from "./http.controller";
+import { loginInput, passwordChangeInput } from "../validators/auth.validator";
 
 const cookieName = "dropxcutz_session";
 const tokenHash = (token: string) =>
@@ -29,10 +30,7 @@ const cookie = (token: string, maxAge: number) =>
   `${cookieName}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
 
 export async function login(request: Request, response: Response) {
-  const email = String(request.body?.email ?? "")
-    .trim()
-    .toLowerCase();
-  const password = String(request.body?.password ?? "");
+  const { email, password } = loginInput.parse(request.body);
   const user = await prisma.user.findUnique({
     where: { email },
     include: { salon: true },
@@ -107,10 +105,7 @@ export async function me(_request: Request, response: Response) {
 
 export async function changePassword(request: Request, response: Response) {
   const user = response.locals.user;
-  const currentPassword = String(request.body?.currentPassword ?? "");
-  const newPassword = String(request.body?.newPassword ?? "");
-  if (newPassword.length < 8)
-    throw new ApiError(400, "New password must be at least 8 characters.");
+  const { currentPassword, newPassword } = passwordChangeInput.parse(request.body);
   if (!(await bcrypt.compare(currentPassword, user.passwordHash)))
     throw new ApiError(401, "Current password is incorrect.");
   await prisma.user.update({

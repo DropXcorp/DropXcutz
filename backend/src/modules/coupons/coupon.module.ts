@@ -4,6 +4,7 @@ import { prisma } from "../../config/prisma";
 import { created, ok, salonId } from "../../controllers/http.controller";
 import { ApiError } from "../../middleware/error.middleware";
 import { requireSalonAdmin } from "../../middleware/session.middleware";
+import { requireFeature } from "../../middleware/feature.middleware";
 import {
   couponInput,
   couponValidation,
@@ -17,6 +18,7 @@ const dto = (x: any) => ({
 
 const user = (r: Response) => String(r.locals.user.id);
 export const couponRouter = Router();
+couponRouter.use(requireFeature("LOYALTY"));
 async function get(salon: string, id: string) {
   const x = await prisma.coupon.findFirst({ where: { id, salonId: salon } });
   if (!x) throw new ApiError(404, "Coupon not found.");

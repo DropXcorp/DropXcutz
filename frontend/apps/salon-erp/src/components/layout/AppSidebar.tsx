@@ -25,9 +25,12 @@ import {
   UserCircle,
   ShoppingCart,
   Crown,
+  Globe,
+  Plug,
 } from "lucide-react";
 
 import AppLogo from "@/src/components/layout/AppLogo";
+import { useERPStore } from "@/src/lib/erp-store";
 
 interface AppSidebarProps {
   mobile?: boolean;
@@ -162,12 +165,25 @@ const menu = [
         href: "/profile",
         icon: UserCircle,
       },
+      {
+        name: "Website Management",
+        href: "/settings/website",
+        icon: Globe,
+        feature: "WEBSITE_MANAGEMENT",
+      },
+      {
+        name: "API Integration",
+        href: "/settings/integration",
+        icon: Plug,
+        feature: "PUBLIC_API",
+      },
     ],
   },
 ];
 
 export default function AppSidebar({ mobile = false }: AppSidebarProps) {
   const pathname = usePathname();
+  const features = useERPStore((state) => state.features);
 
   return (
     <aside className="flex h-full w-72 flex-col bg-white border-r border-zinc-200 select-none">
@@ -180,14 +196,17 @@ export default function AppSidebar({ mobile = false }: AppSidebarProps) {
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto px-4 py-5 scrollbar-thin">
-        {menu.map((section) => (
+        {menu.map((section) => {
+          const items = section.items.filter((item) => !("feature" in item) || !item.feature || features.includes(item.feature));
+          if (!items.length) return null;
+          return (
           <div key={section.title} className="mb-6 last:mb-2">
             <h3 className="mb-2.5 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
               {section.title}
             </h3>
 
             <div className="space-y-1">
-              {section.items.map((item) => {
+              {items.map((item) => {
                 const Icon = item.icon;
                 const active =
                   pathname === item.href ||
@@ -217,7 +236,7 @@ export default function AppSidebar({ mobile = false }: AppSidebarProps) {
               })}
             </div>
           </div>
-        ))}
+        );})}
       </div>
 
       {/* Footer */}

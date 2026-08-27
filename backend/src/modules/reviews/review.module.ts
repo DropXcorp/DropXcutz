@@ -4,6 +4,7 @@ import { prisma } from "../../config/prisma";
 import { ok, salonId } from "../../controllers/http.controller";
 import { ApiError } from "../../middleware/error.middleware";
 import { requireSalonAdmin } from "../../middleware/session.middleware";
+import { requireFeature } from "../../middleware/feature.middleware";
 import { z } from "zod";
 const dto = (x: any) => ({
   id: x.id,
@@ -20,6 +21,7 @@ const dto = (x: any) => ({
 
 const user = (r: Response) => String(r.locals.user.id);
 export const reviewRouter = Router();
+reviewRouter.use(requireFeature("CUSTOM_ERP"));
 async function get(salon: string, id: string) {
   const item = await prisma.review.findFirst({
     where: { id, salonId: salon },

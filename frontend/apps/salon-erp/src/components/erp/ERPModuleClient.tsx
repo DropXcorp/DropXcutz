@@ -657,15 +657,16 @@ function EmployeesView() {
 function ServicesView() {
   const { services, addService, updateService, deleteService } = useERPStore();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ name: string; price: number; durationMinutes: number }>({
+  const [editForm, setEditForm] = useState<{ name: string; price: number; durationMinutes: number; isPublic: boolean }>({
     name: "",
     price: 0,
     durationMinutes: 0,
+    isPublic: true,
   });
 
   const startEdit = (s: Service) => {
     setEditingId(s.id);
-    setEditForm({ name: s.name, price: s.price, durationMinutes: s.durationMinutes });
+    setEditForm({ name: s.name, price: s.price, durationMinutes: s.durationMinutes, isPublic: s.isPublic ?? true });
   };
 
   const cancelEdit = () => {
@@ -688,14 +689,16 @@ function ServicesView() {
               name: String(form.get("name")),
               price: Number(form.get("price")),
               durationMinutes: Number(form.get("durationMinutes")),
+              isPublic: form.get("isPublic") === "on",
             });
             e.currentTarget.reset();
           }}
-          className="grid gap-3 p-5 sm:grid-cols-4"
+          className="grid gap-3 p-5 sm:grid-cols-5"
         >
           <input required name="name" placeholder="Service Name (e.g. Hair Spa)" className={inputClass} />
           <input required name="price" type="number" placeholder="Price (₹)" className={inputClass} />
           <input required name="durationMinutes" type="number" placeholder="Duration (Minutes)" className={inputClass} />
+          <label className="flex items-center gap-2 px-2 text-sm font-medium text-zinc-700"><input name="isPublic" type="checkbox" defaultChecked /> Show on website</label>
           <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
             <Plus className="h-4 w-4" /> Add Service
           </button>
@@ -703,7 +706,7 @@ function ServicesView() {
       </SectionPanel>
 
       <SectionPanel title="Service Catalog" subtitle={`${services.length} active salon services`}>
-        <DataTable heads={["Service Name", "Price", "Duration", "Actions"]}>
+        <DataTable heads={["Service Name", "Price", "Duration", "Website", "Actions"]}>
           {services.map((s) => {
             const isEditing = editingId === s.id;
             return (
@@ -743,6 +746,9 @@ function ServicesView() {
                     `${s.durationMinutes} mins`
                   )}
                 </td>
+                <td className="px-6 py-3.5 text-sm">
+                  {isEditing ? <label className="flex items-center gap-2 text-zinc-700"><input type="checkbox" checked={editForm.isPublic} onChange={(e) => setEditForm({ ...editForm, isPublic: e.target.checked })} /> Visible</label> : <span className={s.isPublic ?? true ? "text-emerald-700" : "text-zinc-400"}>{s.isPublic ?? true ? "Visible" : "Hidden"}</span>}
+                </td>
                 <td className="px-6 py-3.5 text-right">
                   <div className="flex items-center justify-end gap-1">
                     {isEditing ? (
@@ -777,7 +783,7 @@ function ServicesView() {
           })}
           {services.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={5} className="px-6 py-8 text-center text-zinc-400">
                 No services added.
               </td>
             </tr>

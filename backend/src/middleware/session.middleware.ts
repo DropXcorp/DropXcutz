@@ -77,10 +77,7 @@ export async function requirePlatformAdmin(
 ) {
   try {
     const session = await sessionFor(request, response);
-    // Legacy platform-admin records may have a null salon assignment without
-    // the enum being backfilled. They are still platform accounts; salon users
-    // always have a salonId and remain denied here.
-    if (session.user.role !== "PLATFORM_ADMIN" && session.user.salonId)
+    if (session.user.role !== "PLATFORM_ADMIN")
       throw new ApiError(403, "Platform administrator access is required.");
     next();
   } catch (error) {
