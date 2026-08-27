@@ -4,7 +4,7 @@ const backend = process.env.SALON_BACKEND_URL ?? "http://localhost:5000/api";
 
 async function forward(request: Request, resource: string[], method: string) {
   const response = await fetch(
-    `${backend}/platform/${resource.map(encodeURIComponent).join("/")}`,
+    `${backend}/platform/${resource.map(encodeURIComponent).join("/")}${new URL(request.url).search}`,
     {
       method,
       cache: "no-store",
@@ -55,4 +55,3 @@ export async function DELETE(
 ) {
   return forward(request, (await params).resource, "DELETE");
 }
-

@@ -120,6 +120,7 @@ export type Section =
   | "Salons"
   | "Users"
   | "Subscriptions"
+  | "Plans"
   | "Audit Log"
   | "Settings"
   | "Notifications"
@@ -1454,6 +1455,7 @@ export function CreateSalonModal({
               <Field label="Subscription Tier">
                 <select name="plan" className={inputClass} defaultValue="Starter">
                   <option value="Starter">Starter Plan</option>
+                  <option value="Business">Business Plan</option>
                   <option value="Professional">Professional Plan</option>
                   <option value="Enterprise">Enterprise Plan</option>
                 </select>
@@ -1604,6 +1606,7 @@ export function EditSalonModal({
                 className={inputClass}
               >
                 <option value="Starter">Starter</option>
+                <option value="Business">Business</option>
                 <option value="Professional">Professional</option>
                 <option value="Enterprise">Enterprise</option>
               </select>
@@ -1881,9 +1884,11 @@ export function ExtendTrialModal({
 export function SalonDetailsModal({
   salon,
   onClose,
+  onManage,
 }: {
   salon: Salon;
   onClose: () => void;
+  onManage: () => void;
 }) {
   return (
     <div
@@ -1937,7 +1942,8 @@ export function SalonDetailsModal({
             </div>
           </div>
         </div>
-        <footer className="flex justify-end border-t bg-zinc-50 p-4 sm:px-7">
+        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
+          <button onClick={onManage} className="rounded-xl border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-100">Manage entitlement</button>
           <button
             onClick={onClose}
             className="rounded-xl bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-800"

@@ -50,6 +50,10 @@ import type {
 } from "./admin-ui";
 
 const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+type Plan = { id: string; code: string; name: string; description?: string | null; monthlyPrice?: number | null; isActive: boolean; features?: { feature: { code: string; name: string } }[]; _count?: { subscriptions: number } };
+type Feature = { id: string; code: string; name: string };
+type SalonSubscription = { id: string; planId: string; status: "TRIAL" | "ACTIVE" | "EXPIRED" | "SUSPENDED" | "CANCELLED"; expiresAt: string | null } | null;
+type Website = { type: "NONE" | "TEMPLATE" | "CUSTOM"; title?: string | null; description?: string | null; customDomain?: string | null } | null;
 
 const salonCode = (...values: Array<FormDataEntryValue | null>) => {
   for (const value of values) {
@@ -93,6 +97,7 @@ const copy: Record<Section, string> = {
   Salons: "Configure, activate, suspend, edit and monitor salon instances.",
   Users: "Manage platform super administrators and salon account credentials.",
   Subscriptions: "Track plans, trial expiration dates, and tier upgrades.",
+  Plans: "Configure the feature bundles available to salon subscriptions.",
   "Audit Log": "Chronological audit trail of all platform-wide administrative actions.",
   Settings: "Configure security policies, session longevity, and platform defaults.",
   Notifications: "Broadcast system alerts directly into salon ERP dashboards.",
@@ -147,6 +152,9 @@ export default function AdminApp() {
   const [create, setCreate] = useState(false);
   const [editingSalon, setEditingSalon] = useState<Salon | null>(null);
   const [viewingSalon, setViewingSalon] = useState<Salon | null>(null);
+  const [managingSalon, setManagingSalon] = useState<Salon | null>(null);
+  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+  const [creatingPlan, setCreatingPlan] = useState(false);
   const [extendingSubscription, setExtendingSubscription] = useState<Subscription | null>(null);
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [resettingUser, setResettingUser] = useState<PlatformUser | null>(null);
@@ -567,6 +575,7 @@ export default function AdminApp() {
     [Building2, "Salons"],
     [Users, "Users"],
     [CreditCard, "Subscriptions"],
+    [CreditCard, "Plans"],
     [FileClock, "Audit Log"],
     [Settings, "Settings"],
     [Bell, "Notifications"],
@@ -708,6 +717,24 @@ export default function AdminApp() {
               />
             )}
 
+            {section === "Plans" && (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <button onClick={() => setCreatingPlan(true)} className="flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-white text-sm font-semibold text-zinc-700 hover:bg-zinc-50"><Plus className="mb-2 h-5 w-5" />Create plan</button>
+                {sectionLoading && <p className="text-sm text-zinc-500">Loading plans…</p>}
+                {list<Plan>(data).map((plan) => (
+                  <article key={plan.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-zinc-400">{plan.code}</p><h2 className="mt-1 text-lg font-bold">{plan.name}</h2></div><span className={`rounded-full px-2 py-1 text-xs font-semibold ${plan.isActive ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}>{plan.isActive ? "Active" : "Inactive"}</span></div>
+                    <p className="mt-3 text-sm text-zinc-500">{plan.description || "Feature bundle for salon workspaces."}</p>
+                    <p className="mt-4 text-sm font-semibold text-zinc-900">{plan.monthlyPrice == null ? "Custom pricing" : `₹${plan.monthlyPrice}/month`}</p>
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">Included features</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">{plan.features?.map(({ feature }) => <span key={feature.code} className="rounded-md bg-zinc-100 px-2 py-1 text-xs text-zinc-700">{feature.name}</span>)}</div>
+                    <p className="mt-4 text-xs text-zinc-500">{plan._count?.subscriptions ?? 0} subscription(s)</p>
+                    <button onClick={() => setEditingPlan(plan)} className="mt-4 text-sm font-semibold text-zinc-700 underline">Edit plan</button>
+                  </article>
+                ))}
+              </div>
+            )}
+
             {section === "Users" && (
               <UsersView
                 items={list<PlatformUser>(data)}
@@ -774,8 +801,12 @@ export default function AdminApp() {
         <SalonDetailsModal
           salon={viewingSalon}
           onClose={() => setViewingSalon(null)}
+          onManage={() => { setManagingSalon(viewingSalon); setViewingSalon(null); }}
         />
       )}
+
+      {managingSalon && <SalonEntitlementsModal salon={managingSalon} onClose={() => setManagingSalon(null)} onSaved={() => void load()} />}
+      {(creatingPlan || editingPlan) && <PlanEditor plan={editingPlan} onClose={() => { setCreatingPlan(false); setEditingPlan(null); }} onSaved={async () => { setData(await api("/api/platform/plans")); setCreatingPlan(false); setEditingPlan(null); }} />}
 
       {extendingSubscription && (
         <ExtendTrialModal
@@ -805,4 +836,37 @@ export default function AdminApp() {
       )}
     </main>
   );
+}
+
+function SalonEntitlementsModal({ salon, onClose, onSaved }: { salon: Salon; onClose: () => void; onSaved: () => void }) {
+  const [tab, setTab] = useState<"Plan" | "Subscription" | "Features" | "Website">("Plan");
+  const [plans, setPlans] = useState<Plan[]>([]); const [features, setFeatures] = useState<Feature[]>([]);
+  const [subscription, setSubscription] = useState<SalonSubscription>(null); const [enabled, setEnabled] = useState<string[]>([]);
+  const [website, setWebsite] = useState<Website>({ type: "NONE" }); const [error, setError] = useState(""); const [busy, setBusy] = useState(true);
+  const loadData = useCallback(async () => { setBusy(true); try { const [p, f, s, e, w] = await Promise.all([api<Plan[]>("/api/platform/plans"), api<Feature[]>("/api/platform/features"), api<SalonSubscription>(`/api/platform/salons/${salon.id}/subscription`), api<{ code: string; enabled: boolean }[]>(`/api/platform/salons/${salon.id}/features`), api<Website>(`/api/platform/salons/${salon.id}/website`)]); setPlans(p); setFeatures(f); setSubscription(s); setEnabled(e.filter((item) => item.enabled).map((item) => item.code)); setWebsite(w ?? { type: "NONE" }); } catch (e) { setError(e instanceof Error ? e.message : "Could not load entitlement data."); } finally { setBusy(false); } }, [salon.id]);
+  useEffect(() => { void loadData(); }, [loadData]);
+  const saveSubscription = async (renew = false) => { const planId = subscription?.planId; if (!planId) return; try { const saved = await api<SalonSubscription>(`/api/platform/salons/${salon.id}/subscription${renew ? "/renew" : ""}`, { method: renew ? "POST" : "PATCH", body: JSON.stringify({ planId, status: renew ? "ACTIVE" : subscription.status, expiresAt: subscription.expiresAt }) }); setSubscription(saved); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "Could not save subscription."); } };
+  const setPlan = async (planId: string) => { const current = subscription ?? { status: "ACTIVE", expiresAt: null }; try { const saved = await api<SalonSubscription>(`/api/platform/salons/${salon.id}/subscription`, { method: subscription ? "PATCH" : "POST", body: JSON.stringify({ planId, status: current.status, expiresAt: current.expiresAt }) }); setSubscription(saved); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "Could not assign plan."); } };
+  const toggle = async (code: string) => { const next = !enabled.includes(code); try { await api(`/api/platform/salons/${salon.id}/features`, { method: "PUT", body: JSON.stringify({ code, enabled: next }) }); setEnabled((items) => next ? [...items, code] : items.filter((item) => item !== code)); } catch (e) { setError(e instanceof Error ? e.message : "Could not update feature."); } };
+  const saveWebsite = async () => { try { await api(`/api/platform/salons/${salon.id}/website`, { method: "PUT", body: JSON.stringify(website) }); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "Could not save website."); } };
+  return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-zinc-950/60 sm:items-center sm:p-5"><div className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"><header className="flex items-center justify-between border-b p-5"><div><p className="text-xs font-bold uppercase text-zinc-400">Salon control centre</p><h2 className="text-xl font-bold">{salon.salonName}</h2></div><button onClick={onClose} className="rounded-lg p-2 hover:bg-zinc-100"><X /></button></header><nav className="flex gap-1 overflow-x-auto border-b p-3">{(["Plan", "Subscription", "Features", "Website"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${tab === item ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100"}`}>{item}</button>)}</nav><div className="overflow-y-auto p-5">{error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{busy ? <p className="text-sm text-zinc-500">Loading…</p> : <>{tab === "Plan" && <section><h3 className="font-semibold">Assigned plan</h3><select value={subscription?.planId ?? ""} onChange={(e) => void setPlan(e.target.value)} className="mt-3 w-full rounded-xl border px-3 py-2.5"><option value="">Select plan</option>{plans.filter((plan) => plan.isActive).map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></section>}{tab === "Subscription" && <section className="space-y-3"><h3 className="font-semibold">Subscription status</h3><p className="text-sm text-zinc-600">{subscription ? `${subscription.status} · ${subscription.expiresAt ? new Date(subscription.expiresAt).toLocaleDateString() : "No expiry"}` : "No subscription yet"}</p><button disabled={!subscription} onClick={() => void saveSubscription(true)} className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Renew subscription</button></section>}{tab === "Features" && <section><h3 className="font-semibold">Feature overrides</h3><p className="mt-1 text-xs text-zinc-500">Each change is stored as a salon override.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{features.map((feature) => <label key={feature.code} className="flex items-center justify-between rounded-xl border p-3 text-sm"><span>{feature.name}</span><input type="checkbox" checked={enabled.includes(feature.code)} onChange={() => void toggle(feature.code)} /></label>)}</div></section>}{tab === "Website" && <section className="space-y-3"><h3 className="font-semibold">Website configuration</h3><select value={website?.type ?? "NONE"} onChange={(e) => setWebsite({ ...(website ?? {}), type: e.target.value as NonNullable<Website>["type"] })} className="w-full rounded-xl border px-3 py-2.5"><option value="NONE">Not published</option><option value="TEMPLATE">Template website</option><option value="CUSTOM">Custom website</option></select><input value={website?.customDomain ?? ""} onChange={(e) => setWebsite({ ...(website ?? { type: "NONE" }), customDomain: e.target.value })} placeholder="Custom domain" className="w-full rounded-xl border px-3 py-2.5"/><button onClick={() => void saveWebsite()} className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white">Save website</button></section>}</>}</div></div></div>;
+}
+
+function LegacySalonEntitlementsModal({ salon, onClose, onSaved }: { salon: Salon; onClose: () => void; onSaved: () => void }) {
+  const [plans, setPlans] = useState<Plan[]>([]); const [features, setFeatures] = useState<Feature[]>([]);
+  const [subscription, setSubscription] = useState<SalonSubscription>(null); const [enabled, setEnabled] = useState<string[]>([]);
+  const [website, setWebsite] = useState<Website>({ type: "NONE" }); const [error, setError] = useState(""); const [busy, setBusy] = useState(true);
+  const loadData = useCallback(async () => { setBusy(true); try { const [p, f, s, e, w] = await Promise.all([api<Plan[]>("/api/platform/plans"), api<Feature[]>("/api/platform/features"), api<SalonSubscription>(`/api/platform/salons/${salon.id}/subscription`), api<{ code: string; enabled: boolean }[]>(`/api/platform/salons/${salon.id}/features`), api<Website>(`/api/platform/salons/${salon.id}/website`)]); setPlans(p); setFeatures(f); setSubscription(s); setEnabled(e.filter((x) => x.enabled).map((x) => x.code)); setWebsite(w ?? { type: "NONE" }); setError(""); } catch (e) { setError(e instanceof Error ? e.message : "Could not load entitlement data."); } finally { setBusy(false); } }, [salon.id]);
+  useEffect(() => { void loadData(); }, [loadData]);
+  const saveSubscription = async (planId: string) => { const payload = { planId, status: subscription?.status ?? "ACTIVE", expiresAt: subscription?.expiresAt ?? null }; try { const saved = await api<SalonSubscription>(`/api/platform/salons/${salon.id}/subscription`, { method: subscription ? "PATCH" : "POST", body: JSON.stringify(payload) }); setSubscription(saved); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "Could not save subscription."); } };
+  const toggleFeature = async (code: string) => { const next = !enabled.includes(code); try { await api(`/api/platform/salons/${salon.id}/features`, { method: "PUT", body: JSON.stringify({ code, enabled: next }) }); setEnabled((items) => next ? [...items, code] : items.filter((item) => item !== code)); } catch (e) { setError(e instanceof Error ? e.message : "Could not update feature."); } };
+  const saveWebsite = async () => { try { await api(`/api/platform/salons/${salon.id}/website`, { method: "PUT", body: JSON.stringify(website) }); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "Could not save website."); } };
+  return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-zinc-950/60 p-0 sm:items-center sm:p-5"><div className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"><header className="flex items-center justify-between border-b p-5"><div><p className="text-xs font-bold uppercase text-zinc-400">Salon control centre</p><h2 className="text-xl font-bold">{salon.salonName}</h2></div><button onClick={onClose} className="rounded-lg p-2 hover:bg-zinc-100"><X /></button></header><div className="space-y-6 overflow-y-auto p-5">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{busy ? <p className="text-sm text-zinc-500">Loading…</p> : <><section><h3 className="font-semibold">Plan & subscription</h3><select value={subscription?.planId ?? ""} onChange={(e) => void saveSubscription(e.target.value)} className="mt-2 w-full rounded-xl border px-3 py-2.5"><option value="">Select plan</option>{plans.filter((plan) => plan.isActive).map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></section><section><h3 className="font-semibold">Feature overrides</h3><p className="mt-1 text-xs text-zinc-500">Toggle a feature to create a persisted salon override.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{features.map((feature) => <label key={feature.code} className="flex cursor-pointer items-center justify-between rounded-xl border p-3 text-sm"><span>{feature.name}</span><input type="checkbox" checked={enabled.includes(feature.code)} onChange={() => void toggleFeature(feature.code)} /></label>)}</div></section><section><h3 className="font-semibold">Website</h3><div className="mt-2 grid gap-3 sm:grid-cols-2"><select value={website?.type ?? "NONE"} onChange={(e) => setWebsite({ ...(website ?? {}), type: e.target.value as NonNullable<Website>["type"] })} className="rounded-xl border px-3 py-2.5"><option value="NONE">Not published</option><option value="TEMPLATE">Template</option><option value="CUSTOM">Custom</option></select><input value={website?.customDomain ?? ""} onChange={(e) => setWebsite({ ...(website ?? { type: "NONE" }), customDomain: e.target.value })} placeholder="Custom domain" className="rounded-xl border px-3 py-2.5" /></div><button onClick={() => void saveWebsite()} className="mt-3 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">Save website</button></section></>}</div></div></div>;
+}
+
+function PlanEditor({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [features, setFeatures] = useState<Feature[]>([]); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
+  useEffect(() => { void api<Feature[]>("/api/platform/features").then(setFeatures).catch((e) => setError(e instanceof Error ? e.message : "Could not load features.")); }, []);
+  async function submit(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); const featureCodes = form.getAll("feature").map(String); const payload = { code: String(form.get("code")).trim().toUpperCase(), name: String(form.get("name")).trim(), description: String(form.get("description")).trim() || null, monthlyPrice: form.get("monthlyPrice") === "" ? null : Number(form.get("monthlyPrice")), annualPrice: form.get("annualPrice") === "" ? null : Number(form.get("annualPrice")), isActive: form.get("isActive") === "on" }; setSaving(true); setError(""); try { const saved = await api<Plan>(plan ? `/api/platform/plans/${plan.id}` : "/api/platform/plans", { method: plan ? "PATCH" : "POST", body: JSON.stringify(payload) }); await api(`/api/platform/plans/${saved.id}/features`, { method: "PUT", body: JSON.stringify({ featureCodes }) }); await onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "Could not save plan."); } finally { setSaving(false); } }
+  return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-zinc-950/60 p-4"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-xl font-bold">{plan ? "Edit plan" : "Create plan"}</h2><button type="button" onClick={onClose}><X /></button></div>{error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}<div className="mt-5 grid gap-3 sm:grid-cols-2"><input required name="code" defaultValue={plan?.code} placeholder="PLAN_CODE" className="rounded-xl border px-3 py-2.5"/><input required name="name" defaultValue={plan?.name} placeholder="Plan name" className="rounded-xl border px-3 py-2.5"/><input name="monthlyPrice" type="number" min="0" step="0.01" defaultValue={plan?.monthlyPrice ?? ""} placeholder="Monthly price" className="rounded-xl border px-3 py-2.5"/><input name="annualPrice" type="number" min="0" step="0.01" placeholder="Annual price" className="rounded-xl border px-3 py-2.5"/><textarea name="description" defaultValue={plan?.description ?? ""} placeholder="Description" className="min-h-24 rounded-xl border px-3 py-2.5 sm:col-span-2"/><label className="flex items-center gap-2 text-sm"><input name="isActive" type="checkbox" defaultChecked={plan?.isActive ?? true}/> Active plan</label></div><h3 className="mt-6 font-semibold">Feature entitlement</h3><div className="mt-3 grid gap-2 sm:grid-cols-2">{features.map((feature) => <label key={feature.id} className="flex items-center gap-2 rounded-xl border p-3 text-sm"><input name="feature" type="checkbox" value={feature.code} defaultChecked={plan?.features?.some((item) => item.feature.code === feature.code)}/>{feature.name}</label>)}</div><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5 text-sm font-semibold">Cancel</button><button disabled={saving} className={buttonClass}>{saving ? "Saving…" : "Save plan"}</button></div></form></div>;
 }

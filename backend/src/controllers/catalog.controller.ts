@@ -31,6 +31,7 @@ export async function createEmployee(request: Request, response: Response) {
       baseSalary: input.baseSalary,
       commissionRate: input.commissionRate,
       active: input.active,
+      isBookable: input.isBookable,
     },
   });
   created(response, employeeDto(item));
@@ -101,6 +102,7 @@ export async function createService(request: Request, response: Response) {
       inventoryItemId: input.stockItemId || null,
       inventoryQuantity: input.inventoryQuantity,
       active: input.active,
+      isPublic: input.isPublic,
     },
   });
   created(response, serviceDto(item));

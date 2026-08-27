@@ -27,9 +27,25 @@ enum MembershipTier {
 }
 
 enum AppointmentSource {
+  ERP
   WALK_IN
-  ONLINE
+  WEBSITE
   PHONE
+  WHATSAPP
+}
+
+enum WebsiteType {
+  NONE
+  TEMPLATE
+  CUSTOM
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
 }
 
 enum AppointmentStatus {
@@ -132,6 +148,7 @@ enum DiscountType {
 model Salon {
   id                      String            @id @default(cuid())
   code                    String            @unique @db.VarChar(60)
+  slug                    String            @unique @db.VarChar(60)
   salonName               String            @db.VarChar(160)
   legalName               String            @db.VarChar(200)
   gstin                   String?           @db.VarChar(20)
@@ -159,6 +176,7 @@ model Salon {
   dailyRevenueDigest      Boolean           @default(true)
   status                  SalonStatus       @default(TRIAL)
   subscriptionPlan        String            @default("Starter") @db.VarChar(60)
+  planId                  String?
   trialEndsAt             DateTime?
   nextAppointmentNumber   Int               @default(1001)
   nextInvoiceNumber       Int               @default(1)
@@ -187,8 +205,96 @@ model Salon {
   offers                  Offer[]
   salonSettings           SalonSettings?
   salonAuditLogs          SalonAuditLog[]
+  integrations           SalonIntegration[]
+  plan                   Plan?             @relation("SalonPlan", fields: [planId], references: [id], onDelete: SetNull)
+  subscriptions          Subscription[]
+  salonFeatures          SalonFeature[]
+  websiteSettings        SalonWebsiteSettings?
 
   @@index([status])
+  @@index([planId])
+}
+
+model Plan {
+  id           String        @id @default(cuid())
+  code         String        @unique @db.VarChar(60)
+  name         String        @unique @db.VarChar(100)
+  description  String?
+  monthlyPrice Decimal?      @db.Decimal(12, 2)
+  annualPrice  Decimal?      @db.Decimal(12, 2)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  salons       Salon[]       @relation("SalonPlan")
+  features     PlanFeature[]
+  subscriptions Subscription[]
+}
+
+model Feature {
+  id          String        @id @default(cuid())
+  code        String        @unique @db.VarChar(80)
+  name        String        @db.VarChar(120)
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  plans       PlanFeature[]
+  salons      SalonFeature[]
+}
+
+model PlanFeature {
+  planId    String
+  featureId String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature   Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([planId, featureId])
+  @@index([featureId])
+}
+
+model SalonFeature {
+  salonId   String
+  featureId String
+  enabled   Boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  feature   Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([salonId, featureId])
+  @@index([featureId])
+}
+
+model Subscription {
+  id          String             @id @default(cuid())
+  salonId     String
+  planId      String
+  status      SubscriptionStatus @default(TRIAL)
+  startsAt    DateTime           @default(now())
+  expiresAt   DateTime?
+  monthlyPrice Decimal?           @db.Decimal(12, 2)
+  annualPrice  Decimal?           @db.Decimal(12, 2)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  salon       Salon              @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  plan        Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([salonId, status])
+  @@index([planId])
+}
+
+model SalonWebsiteSettings {
+  id          String      @id @default(cuid())
+  salonId     String      @unique
+  type        WebsiteType @default(NONE)
+  title       String?     @db.VarChar(160)
+  description String?
+  customDomain String?    @db.VarChar(253)
+  theme       Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  salon       Salon       @relation(fields: [salonId], references: [id], onDelete: Cascade)
 }
 
 model Customer {
@@ -226,6 +332,7 @@ model Employee {
   baseSalary       Decimal           @default(0) @db.Decimal(12, 2)
   commissionRate   Decimal           @default(10) @db.Decimal(5, 2)
   active           Boolean           @default(true)
+  isBookable       Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   salon            Salon             @relation(fields: [salonId], references: [id], onDelete: Cascade)
@@ -276,6 +383,7 @@ model Service {
   inventoryItemId   String?
   inventoryQuantity Int               @default(1)
   active            Boolean           @default(true)
+  isPublic          Boolean           @default(true)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   salon             Salon             @relation(fields: [salonId], references: [id], onDelete: Cascade)
@@ -299,6 +407,7 @@ model Appointment {
   branchId          String?
   timeSlotId        String?
   source            AppointmentSource @default(WALK_IN)
+  websiteRequestId  String?           @db.VarChar(100)
   scheduledAt       DateTime
   durationMinutes   Int
   subtotal          Decimal           @db.Decimal(12, 2)
@@ -328,6 +437,20 @@ model Appointment {
   @@index([employeeId])
   @@index([branchId])
   @@index([timeSlotId])
+  @@unique([salonId, websiteRequestId])
+}
+
+model SalonIntegration {
+  id             String   @id @default(cuid())
+  salonId        String
+  publicKey      String   @unique @db.VarChar(100)
+  allowedDomains String[] @default([])
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  salon          Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+
+  @@index([salonId])
 }
 
 model AppointmentLine {

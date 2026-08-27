@@ -8,6 +8,7 @@ import {
 } from "../services/salon.service";
 import { customerInput, customerPatch } from "../validators/salon.validator";
 import { created, ok, salonId } from "./http.controller";
+import { loyaltyAdjustmentInput } from "../validators/loyalty.validator";
 
 export async function createCustomer(request: Request, response: Response) {
   const input = customerInput.parse(request.body);
@@ -50,9 +51,7 @@ export async function adjustLoyalty(request: Request, response: Response) {
   const currentSalonId = salonId(response);
   const customerId = String(request.params.customerId);
   await assertOwned("customer", customerId, currentSalonId);
-  const points = Number(request.body?.points);
-  if (!Number.isInteger(points) || points === 0)
-    throw new ApiError(400, "Points must be a non-zero integer.");
+  const { points, description } = loyaltyAdjustmentInput.parse(request.body);
   const result = await prisma.$transaction(async (client) => {
     const customer = await client.customer.findUniqueOrThrow({
       where: { id: customerId },
@@ -68,9 +67,7 @@ export async function adjustLoyalty(request: Request, response: Response) {
         customerId,
         type: "ADJUSTMENT",
         points,
-        description: String(
-          request.body?.description ?? "Manual adjustment",
-        ).slice(0, 5000),
+        description: description || "Manual adjustment",
       },
     });
     return client.customer.update({

@@ -1,25 +1,31 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../middleware/error.middleware";
+import { getEffectiveFeatures } from "./feature.service";
 
 const membershipToDb = {
   Standard: "STANDARD",
   Silver: "SILVER",
   Gold: "GOLD",
 } as const;
+
 const membershipToUi = {
   STANDARD: "Standard",
   SILVER: "Silver",
   GOLD: "Gold",
 } as const;
 const sourceToDb = {
+  ERP: "ERP",
   "Walk-in": "WALK_IN",
-  Online: "ONLINE",
+  Online: "WEBSITE",
   Phone: "PHONE",
+  WhatsApp: "WHATSAPP",
 } as const;
 const sourceToUi = {
+  ERP: "ERP",
   WALK_IN: "Walk-in",
-  ONLINE: "Online",
+  WEBSITE: "Online",
   PHONE: "Phone",
+  WHATSAPP: "WhatsApp",
 } as const;
 const appointmentStatusToDb = {
   Booked: "BOOKED",
@@ -71,6 +77,7 @@ export type EmployeeInput = {
   baseSalary: number;
   commissionRate?: number;
   active?: boolean;
+  isBookable?: boolean;
 };
 export type InventoryInput = {
   name: string;
@@ -88,6 +95,7 @@ export type ServiceInput = {
   stockItemId?: string | null;
   inventoryQuantity?: number;
   active?: boolean;
+  isPublic?: boolean;
 };
 
 export const toNumber = (value: { toString(): string } | number) =>
@@ -118,6 +126,7 @@ export function employeeData(input: Partial<EmployeeInput>) {
       commissionRate: input.commissionRate,
     }),
     ...(input.active !== undefined && { active: input.active }),
+    ...(input.isBookable !== undefined && { isBookable: input.isBookable }),
   };
 }
 
@@ -151,6 +160,7 @@ export function serviceData(input: Partial<ServiceInput>) {
       inventoryQuantity: input.inventoryQuantity,
     }),
     ...(input.active !== undefined && { active: input.active }),
+    ...(input.isPublic !== undefined && { isPublic: input.isPublic }),
   };
 }
 
@@ -212,6 +222,7 @@ export const employeeDto = (employee: any) => ({
   phone: employee.phone,
   baseSalary: toNumber(employee.baseSalary),
   active: employee.active,
+  isBookable: employee.isBookable,
 });
 export const inventoryDto = (item: any) => ({
   id: item.id,
@@ -226,6 +237,7 @@ export const serviceDto = (service: any) => ({
   name: service.name,
   price: toNumber(service.price),
   durationMinutes: service.durationMinutes,
+  isPublic: service.isPublic,
   ...(service.inventoryItemId && { stockItemId: service.inventoryItemId }),
 });
 const datePart = (date: Date) => date.toISOString().slice(0, 10);
@@ -332,6 +344,9 @@ export async function getSnapshot(salonId: string) {
     invoices,
     payroll,
     notifications,
+    subscription,
+    effectiveFeatures,
+    website,
   ] = await Promise.all([
     prisma.salon.findUniqueOrThrow({ where: { id: salonId } }),
     prisma.customer.findMany({
@@ -374,7 +389,13 @@ export async function getSnapshot(salonId: string) {
       orderBy: { createdAt: "desc" },
       take: 100,
     }),
+    prisma.subscription.findFirst({ where: { salonId }, orderBy: { createdAt: "desc" }, include: { plan: true } }),
+    getEffectiveFeatures(salonId),
+    prisma.salonWebsiteSettings.findUnique({ where: { salonId } }),
   ]);
+  const enabledFeatures = new Set(
+    effectiveFeatures.filter((feature) => feature.enabled).map((feature) => feature.code),
+  );
   return {
     salon: {
       id: salon.id,
@@ -382,14 +403,17 @@ export async function getSnapshot(salonId: string) {
       status: salon.status,
       subscriptionPlan: salon.subscriptionPlan,
     },
+    subscription: subscription ? { plan: subscription.plan.name, status: subscription.status, expiresAt: subscription.expiresAt?.toISOString() ?? null } : null,
+    features: [...enabledFeatures],
+    website: website ? { type: website.type } : null,
     settings: settingsDto(salon),
-    customers: customers.map(customerDto),
-    employees: employees.map(employeeDto),
-    services: services.map(serviceDto),
-    inventory: inventory.map(inventoryDto),
-    appointments: appointments.map(appointmentDto),
-    invoices: invoices.map(invoiceDto),
-    payroll: payroll.map(payrollDto),
+    customers: enabledFeatures.has("CUSTOMERS") ? customers.map(customerDto) : [],
+    employees: enabledFeatures.has("EMPLOYEES") ? employees.map(employeeDto) : [],
+    services: enabledFeatures.has("SERVICES") ? services.map(serviceDto) : [],
+    inventory: enabledFeatures.has("INVENTORY") ? inventory.map(inventoryDto) : [],
+    appointments: enabledFeatures.has("APPOINTMENTS") ? appointments.map(appointmentDto) : [],
+    invoices: enabledFeatures.has("INVOICES") ? invoices.map(invoiceDto) : [],
+    payroll: enabledFeatures.has("PAYROLL") ? payroll.map(payrollDto) : [],
     notifications,
   };
 }
@@ -460,7 +484,10 @@ export async function saveAppointment(
   const saved = await prisma.$transaction(async (client) => {
     await client.customer.update({
       where: { id: input.customer.id },
-      data: { name: input.customer.name, ...(input.customer.phone ? { phone: input.customer.phone } : {}) },
+      data: {
+        name: input.customer.name,
+        ...(input.customer.phone ? { phone: input.customer.phone } : {}),
+      },
     });
     const data = {
       customerId: input.customer.id,
@@ -531,10 +558,15 @@ export async function createInvoice(salonId: string, input: any) {
     if (input.appointmentId) {
       await client.appointment.update({
         where: { id: input.appointmentId },
-        data: { amountPaid: input.status === "Paid" ? input.amount : 0, paymentStatus: paymentStatusToDb[input.status as keyof typeof paymentStatusToDb] },
+        data: {
+          amountPaid: input.status === "Paid" ? input.amount : 0,
+          paymentStatus:
+            paymentStatusToDb[input.status as keyof typeof paymentStatusToDb],
+        },
       });
     }
-    if (input.status === "Paid") await refreshCustomerSpend(client, input.customerId);
+    if (input.status === "Paid")
+      await refreshCustomerSpend(client, input.customerId);
     return created;
   });
   return invoiceDto(invoice);

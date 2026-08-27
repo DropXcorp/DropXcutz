@@ -1,25 +1,35 @@
 # DropXCutz salon API
 
-Express, Prisma 7 and PostgreSQL backend for the salon ERP and platform super-admin.
+Express, Prisma 7 and PostgreSQL backend for the multi-tenant salon ERP and platform super-admin.
 
 ## Run locally
 
 ```bash
 bun install
-bunx prisma migrate deploy
+bun run db:deploy
 bun run db:seed
 bun run dev
 ```
 
-The API runs on `http://localhost:5000`. Salon routes are under `/api/erp` and require `x-salon-code`. Platform routes are under `/api/platform` and require `x-super-admin-key` matching `SUPER_ADMIN_API_KEY`.
+The API runs on `http://localhost:5000`. ERP and platform routes use the secure `dropxcutz_session` HTTP-only cookie issued at `/api/erp/auth/login`; platform endpoints require a `PLATFORM_ADMIN` session.
+
+## Plans, subscriptions and websites
+
+- Platform plan APIs: `/api/platform/plans`, `/api/platform/features`
+- Per-salon subscription and overrides: `/api/platform/salons/:id/subscription`, `/features`, `/website`
+- Template public website API: `/api/public/v1/salons/:slug/...`
+- Professional/custom website API: `/api/v1/public/...` with `X-DropXcutz-Key` and an allowed origin
+
+Run `bun run db:seed` after deployment. It safely creates or updates the default plans/features and links legacy salons to a subscription.
 
 Required environment variables:
 
 ```dotenv
 DATABASE_URL=postgresql://...
-SUPER_ADMIN_API_KEY=replace-with-a-long-random-secret # required only for the super-admin app
+JWT_SECRET=at-least-32-characters
+FRONTEND_ORIGINS=http://localhost:3000,http://localhost:3001
 ```
 
-Optional settings are `PORT_NO` (defaults to `5000`), `FRONTEND_ORIGINS` (defaults to the two local apps), and `DEFAULT_SALON_CODE` for local ERP development. Copy `.env.example` to `.env` and fill in the values. Redis, upload, payment, JWT, and WebSocket settings are not used by this API.
+Optional settings are `PORT_NO` (defaults to `5000`) and `FRONTEND_ORIGINS`. Copy `.env.example` to `.env` and fill in the values. Redis, uploads, payment processing, and WebSockets are not configured in this project.
 
 Use `bun run typecheck` to validate the backend and `bunx prisma migrate dev --name <change>` when changing the schema.
