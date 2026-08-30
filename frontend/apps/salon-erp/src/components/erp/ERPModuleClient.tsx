@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import {
   BarChart3,
   Bell,
@@ -28,8 +29,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Search,
-  Filter,
-  ArrowUpRight,
   TrendingUp,
   Clock,
   Sparkles,
@@ -38,18 +37,14 @@ import {
   Pencil,
   X,
   Check,
-  RotateCcw,
   Download,
 } from "lucide-react";
 import {
   useERPStore,
   type SalonSettings,
   type Customer,
-  type Employee,
   type Service,
-  type InventoryItem,
   type Invoice,
-  type PayrollRun,
   type Branch,
   type Expense,
   type AttendanceRecord,
@@ -57,8 +52,6 @@ import {
   type Package,
   type MembershipPlan,
   type Coupon,
-  type Review,
-  type PurchaseOrder,
 } from "@/src/lib/erp-store";
 import { employeeForm, validationMessage } from "@/src/lib/form-validation";
 
@@ -83,6 +76,21 @@ type Module =
   | "reviews"
   | "memberships"
   | "purchase-orders";
+
+const moduleFeature: Partial<Record<Module, string>> = {
+  customers: "CUSTOMERS",
+  employees: "EMPLOYEES",
+  services: "SERVICES",
+  inventory: "INVENTORY",
+  billing: "INVOICES",
+  payroll: "PAYROLL",
+  loyalty: "LOYALTY",
+  memberships: "LOYALTY",
+  branches: "MULTI_BRANCH",
+  attendance: "EMPLOYEES",
+  suppliers: "INVENTORY",
+  "purchase-orders": "INVENTORY",
+};
 
 const meta: Record<
   Module,
@@ -214,10 +222,38 @@ const inputClass =
   "w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900";
 const money = (value: number) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 
+async function submitAndReset(
+  form: HTMLFormElement,
+  submit: () => Promise<unknown>,
+) {
+  const store = useERPStore.getState();
+  store.clearError();
+  try {
+    await submit();
+  } catch {
+    // Store actions already provide the user-facing error notification.
+  }
+  if (!useERPStore.getState().error) form.reset();
+}
+
 export default function ERPModuleClient({ module }: { module: Module }) {
   const info = meta[module];
   const Icon = info.icon;
-  const { error, successMessage, clearError, clearSuccess } = useERPStore();
+  const { error, successMessage, clearError, clearSuccess, features, hydrated } = useERPStore();
+  const requiredFeature = moduleFeature[module];
+
+  if (hydrated && requiredFeature && !features.includes(requiredFeature)) {
+    return (
+      <section className="mx-auto grid min-h-[50vh] max-w-lg place-items-center px-4 text-center">
+        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <AlertCircle className="mx-auto h-9 w-9 text-amber-500" />
+          <h1 className="mt-4 text-xl font-bold text-zinc-950">Module not included in your plan</h1>
+          <p className="mt-2 text-sm leading-6 text-zinc-500">Ask your platform administrator to enable {requiredFeature.replace(/_/g, " ")} for this salon.</p>
+          <Link href="/dashboard" className="mt-6 inline-flex rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white">Return to dashboard</Link>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <motion.div
@@ -398,13 +434,25 @@ function DataTable({
   );
 }
 
-function DeleteButton({ onClick }: { onClick: () => void }) {
+function DeleteButton({ onClick }: { onClick: () => Promise<void> }) {
+  const [deleting, setDeleting] = useState(false);
+  const remove = async () => {
+    if (deleting || !window.confirm("Delete this record? This action cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      await onClick();
+    } finally {
+      setDeleting(false);
+    }
+  };
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-      title="Delete record"
+      onClick={() => void remove()}
+      disabled={deleting}
+      aria-busy={deleting}
+      className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-wait disabled:opacity-50"
+      title={deleting ? "Deleting…" : "Delete record"}
     >
       <Trash2 className="h-4 w-4" />
     </button>
@@ -470,16 +518,15 @@ function CustomersView() {
 
       <SectionPanel title="Quick Register Customer" subtitle="Add new client profile directly to CRM">
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            addCustomer({
+            await submitAndReset(e.currentTarget, () => addCustomer({
               name: String(form.get("name")),
               phone: String(form.get("phone")),
               email: String(form.get("email") || ""),
-              membership: form.get("membership") as any,
-            });
-            e.currentTarget.reset();
+              membership: form.get("membership") as Customer["membership"],
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-4"
         >
@@ -682,16 +729,15 @@ function ServicesView() {
     <div className="space-y-6">
       <SectionPanel title="New Service" subtitle="Add salon treatment / package to service catalog">
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            addService({
+            await submitAndReset(e.currentTarget, () => addService({
               name: String(form.get("name")),
               price: Number(form.get("price")),
               durationMinutes: Number(form.get("durationMinutes")),
               isPublic: form.get("isPublic") === "on",
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-5"
         >
@@ -798,7 +844,7 @@ function ServicesView() {
 // 4. INVENTORY VIEW
 // -------------------------------------------------------------
 function InventoryView() {
-  const { inventory, addInventory, updateInventory, deleteInventory } = useERPStore();
+  const { inventory, addInventory, deleteInventory } = useERPStore();
 
   const lowStock = inventory.filter((i) => i.stock <= i.reorderLevel);
 
@@ -829,17 +875,16 @@ function InventoryView() {
 
       <SectionPanel title="Add Stock Item" subtitle="Create new product SKU with unit costs">
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            addInventory({
+            await submitAndReset(e.currentTarget, () => addInventory({
               name: String(form.get("name")),
               sku: String(form.get("sku")),
               stock: Number(form.get("stock")),
               reorderLevel: Number(form.get("reorderLevel")),
               unitCost: Number(form.get("unitCost")),
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-6"
         >
@@ -890,7 +935,7 @@ function InventoryView() {
 // 5. BILLING & INVOICES VIEW
 // -------------------------------------------------------------
 function BillingView() {
-  const { invoices, customers, appointments, addInvoice, updateInvoice, deleteInvoice } = useERPStore();
+  const { invoices, customers, appointments, addInvoice, deleteInvoice } = useERPStore();
   const [invoiceAppointmentId, setInvoiceAppointmentId] = useState("");
   const [invoiceAmount, setInvoiceAmount] = useState("");
 
@@ -946,7 +991,7 @@ function BillingView() {
               customerId: String(form.get("customerId")),
               appointmentId: invoiceAppointmentId || undefined,
               amount: invoiceAppointmentId ? Number(invoiceAmount) : Number(form.get("amount")),
-              status: form.get("status") as any,
+              status: form.get("status") as Invoice["status"],
             });
             e.currentTarget.reset();
             setInvoiceAppointmentId("");
@@ -1038,19 +1083,18 @@ function PayrollView() {
     <div className="space-y-6">
       <SectionPanel title="Run Monthly Payroll" subtitle="Calculate base salary and commission disbursements">
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
             const empId = String(form.get("employeeId"));
             const emp = employees.find((x) => x.id === empId);
-            addPayroll({
+            await submitAndReset(e.currentTarget, () => addPayroll({
               employeeId: empId,
               month: String(form.get("month")),
               baseSalary: Number(form.get("baseSalary") || emp?.baseSalary || 0),
               commission: Number(form.get("commission") || 0),
               status: "Draft",
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-5"
         >
@@ -1153,17 +1197,16 @@ function BranchesView() {
     <div className="space-y-6">
       <SectionPanel title="Add Branch Outlet" subtitle="Configure additional salon physical locations">
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            addBranch({
+            await submitAndReset(e.currentTarget, () => addBranch({
               name: String(form.get("name")),
               code: String(form.get("code")),
               city: String(form.get("city")),
               phone: String(form.get("phone")),
               status: "ACTIVE",
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-5"
         >
@@ -1298,14 +1341,13 @@ function AttendanceView() {
     <div className="space-y-6">
       <SectionPanel title="Punch Attendance" subtitle="Record daily check-in and attendance status">
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            recordAttendance({
+            await submitAndReset(e.currentTarget, () => recordAttendance({
               employeeId: String(form.get("employeeId")),
-              status: form.get("status") as any,
-            });
-            e.currentTarget.reset();
+              status: form.get("status") as AttendanceRecord["status"],
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-3"
         >
@@ -1413,16 +1455,15 @@ function ExpensesView() {
 
       <SectionPanel title="Log New Expense" subtitle="Record utility bills, rent, supplies and maintenance">
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            addExpense({
+            await submitAndReset(e.currentTarget, () => addExpense({
               title: String(form.get("title")),
               category: String(form.get("category")),
               amount: Number(form.get("amount")),
               date: new Date().toISOString(),
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-4"
         >
@@ -1914,7 +1955,7 @@ function CouponsView() {
             const form = new FormData(e.currentTarget);
             await addCoupon({
               code: String(form.get("code")).toUpperCase().trim(),
-              discountType: form.get("discountType") as any,
+              discountType: form.get("discountType") as Coupon["discountType"],
               discountValue: Number(form.get("discountValue")),
               minimumOrder: Number(form.get("minOrderAmount") || 0),
               isActive: true,
@@ -1957,7 +1998,7 @@ function CouponsView() {
                   {isEditing ? (
                     <select
                       value={editForm.discountType}
-                      onChange={(ev) => setEditForm({ ...editForm, discountType: ev.target.value as any })}
+                      onChange={(ev) => setEditForm({ ...editForm, discountType: ev.target.value as Coupon["discountType"] })}
                       className={`${inputClass} py-1 text-xs`}
                     >
                       <option value="PERCENTAGE">Percentage (%)</option>
@@ -2120,9 +2161,9 @@ function ReviewsView() {
               <tr key={r.id} className="hover:bg-zinc-50/50">
                 <td className="px-6 py-3.5 font-medium text-zinc-900">{cust?.name ?? r.customerName ?? "Client"}</td>
                 <td className="px-6 py-3.5 text-amber-500 font-bold">{"★".repeat(r.rating)}</td>
-                <td className="px-6 py-3.5 text-zinc-700 italic">"{r.comment || "Great service!"}"</td>
+                <td className="px-6 py-3.5 text-zinc-700 italic">&ldquo;{r.comment || "Great service!"}&rdquo;</td>
                 <td className="px-6 py-3.5 text-zinc-400 text-xs">
-                  {new Date(r.createdAt || Date.now()).toLocaleDateString("en-IN")}
+                  {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN") : "—"}
                 </td>
               </tr>
             );
@@ -2766,17 +2807,16 @@ function MembershipsView() {
       <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <SectionPanel title="Create Membership Tier" subtitle="Define VIP club benefits and validity">
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               const form = new FormData(e.currentTarget);
-              addMembershipPlan({
+              await submitAndReset(e.currentTarget, () => addMembershipPlan({
                 name: String(form.get("name")),
                 price: Number(form.get("price")),
                 validityDays: Number(form.get("validityDays") || 365),
                 discountPercentage: Number(form.get("discountPercentage") || 0),
                 loyaltyMultiplier: Number(form.get("loyaltyMultiplier") || 1),
-              });
-              e.currentTarget.reset();
+              }));
             }}
             className="grid gap-3 p-5 sm:grid-cols-3"
           >

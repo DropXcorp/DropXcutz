@@ -59,12 +59,17 @@ export default function AppointmentActions({
     }
 
     document.addEventListener("mousedown", handleClickOutside);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handleEscape);
 
     return () => {
       document.removeEventListener(
         "mousedown",
         handleClickOutside
       );
+      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
@@ -78,13 +83,16 @@ export default function AppointmentActions({
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-label={`Actions for ${appointment.customer.name}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
         className="rounded-xl p-2 transition hover:bg-slate-100"
       >
         <MoreVertical className="h-5 w-5 text-slate-600" />
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div role="menu" className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           <div className="border-b border-slate-100 px-4 py-3">
             <p className="text-sm font-semibold text-slate-900">
               {appointment.customer.name}
@@ -130,6 +138,7 @@ function MenuItem({
     <button
       type="button"
       onClick={onClick}
+      role="menuitem"
       className={`flex w-full items-center gap-3 px-4 py-3 text-left transition
         ${
           danger

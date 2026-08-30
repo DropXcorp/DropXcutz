@@ -249,6 +249,7 @@ type ERPState = Snapshot & {
   refresh: () => Promise<void>;
   clearError: () => void;
   clearSuccess: () => void;
+  resetSession: () => void;
   setIdentity: (user: ERPUser, salon: ERPSalon | null) => void;
   
   // Customers
@@ -400,10 +401,13 @@ const replace = <T extends { id: string }>(items: T[], item: T) =>
   items.map((current) => (current.id === item.id ? item : current));
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "The request could not be completed.";
-const toList = <T>(res: any): T[] => {
+const toList = <T>(res: unknown): T[] => {
   if (Array.isArray(res)) return res;
-  if (Array.isArray(res?.data)) return res.data;
-  if (Array.isArray(res?.data?.data)) return res.data.data;
+  if (!res || typeof res !== "object") return [];
+  const data = (res as { data?: unknown }).data;
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === "object" && Array.isArray((data as { data?: unknown }).data))
+    return (data as { data: T[] }).data;
   return [];
 };
 
@@ -438,6 +442,15 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   clearError: () => set({ error: null }),
   clearSuccess: () => set({ successMessage: null }),
+  resetSession: () =>
+    set({
+      customers: [], employees: [], services: [], inventory: [], appointments: [],
+      invoices: [], payroll: [], notifications: [], branches: [], expenses: [],
+      attendance: [], suppliers: [], packages: [], membershipPlans: [], coupons: [],
+      reviews: [], purchaseOrders: [], currentUser: null, currentSalon: null,
+      subscription: null, features: [], website: null, settings: emptySettings,
+      loading: false, hydrated: false, error: null, successMessage: null,
+    }),
   setIdentity: (user, salon) => set({ currentUser: user, currentSalon: salon }),
 
   hydrate: async () => {
@@ -824,7 +837,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
   // Extended Modules Actions
   fetchBranches: async () => {
     try {
-      const data = await api<any>("/branches");
+      const data = await api<unknown>("/branches");
       set({ branches: toList<Branch>(data) });
     } catch (error) { set({ error: message(error) }); }
   },
@@ -886,7 +899,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchExpenses: async () => {
     try {
-      const res = await api<any>("/expenses");
+      const res = await api<unknown>("/expenses");
       set({ expenses: toList<Expense>(res) });
     } catch (error) { set({ error: message(error) }); }
   },
@@ -934,7 +947,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchAttendance: async () => {
     try {
-      const res = await api<any>("/attendance");
+      const res = await api<unknown>("/attendance");
       set({ attendance: toList<AttendanceRecord>(res) });
     } catch (error) { set({ error: message(error) }); }
   },
@@ -954,7 +967,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchSuppliers: async () => {
     try {
-      const res = await api<any>("/suppliers");
+      const res = await api<unknown>("/suppliers");
       set({ suppliers: toList<Supplier>(res) });
     } catch (error) { set({ error: message(error) }); }
   },
@@ -1003,7 +1016,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchPackages: async () => {
     try {
-      const data = await api<any>("/packages");
+      const data = await api<unknown>("/packages");
       set({ packages: toList<Package>(data) });
     } catch (error) { set({ error: message(error) }); }
   },
@@ -1052,7 +1065,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchMemberships: async () => {
     try {
-      const data = await api<any>("/memberships/plans");
+      const data = await api<unknown>("/memberships/plans");
       set({ membershipPlans: toList<MembershipPlan>(data) });
     } catch (error) { set({ error: message(error) }); }
   },
@@ -1113,7 +1126,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchCoupons: async () => {
     try {
-      const data = await api<any>("/coupons");
+      const data = await api<unknown>("/coupons");
       set({ coupons: toList<Coupon>(data) });
     } catch (error) { set({ error: message(error) }); }
   },
@@ -1162,7 +1175,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchReviews: async () => {
     try {
-      const data = await api<any>("/reviews");
+      const data = await api<unknown>("/reviews");
       set({ reviews: toList<Review>(data) });
     } catch (error) { set({ error: message(error) }); }
   },
@@ -1185,7 +1198,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchPurchaseOrders: async () => {
     try {
-      const data = await api<any>("/purchase-orders");
+      const data = await api<unknown>("/purchase-orders");
       set({ purchaseOrders: toList<PurchaseOrder>(data) });
     } catch (error) { set({ error: message(error) }); }
   },

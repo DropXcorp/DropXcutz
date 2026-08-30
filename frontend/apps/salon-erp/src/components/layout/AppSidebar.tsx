@@ -25,8 +25,6 @@ import {
   UserCircle,
   ShoppingCart,
   Crown,
-  Globe,
-  Plug,
 } from "lucide-react";
 
 import AppLogo from "@/src/components/layout/AppLogo";
@@ -49,26 +47,31 @@ const menu = [
         name: "Appointments",
         href: "/appointments",
         icon: CalendarDays,
+        feature: "APPOINTMENTS",
       },
       {
         name: "Customers",
         href: "/customers",
         icon: Users,
+        feature: "CUSTOMERS",
       },
       {
         name: "Employees",
         href: "/employees",
         icon: UserCog,
+        feature: "EMPLOYEES",
       },
       {
         name: "Services",
         href: "/services",
         icon: Scissors,
+        feature: "SERVICES",
       },
       {
         name: "Billing & POS",
         href: "/billing",
         icon: Receipt,
+        feature: "INVOICES",
       },
     ],
   },
@@ -79,21 +82,25 @@ const menu = [
         name: "Attendance",
         href: "/attendance",
         icon: CalendarCheck,
+        feature: "EMPLOYEES",
       },
       {
         name: "Inventory",
         href: "/inventory",
         icon: Boxes,
+        feature: "INVENTORY",
       },
       {
         name: "Purchase Orders",
         href: "/purchase-orders",
         icon: ShoppingCart,
+        feature: "INVENTORY",
       },
       {
         name: "Suppliers",
         href: "/suppliers",
         icon: Truck,
+        feature: "INVENTORY",
       },
       {
         name: "Expenses",
@@ -104,6 +111,7 @@ const menu = [
         name: "Payroll",
         href: "/payroll",
         icon: Wallet,
+        feature: "PAYROLL",
       },
     ],
   },
@@ -114,11 +122,13 @@ const menu = [
         name: "Loyalty & Points",
         href: "/loyalty",
         icon: Gift,
+        feature: "LOYALTY",
       },
       {
         name: "Membership Tiers",
         href: "/memberships",
         icon: Crown,
+        feature: "LOYALTY",
       },
       {
         name: "Packages",
@@ -149,6 +159,7 @@ const menu = [
         name: "Branches",
         href: "/branches",
         icon: Building2,
+        feature: "MULTI_BRANCH",
       },
       {
         name: "Notifications",
@@ -165,18 +176,6 @@ const menu = [
         href: "/profile",
         icon: UserCircle,
       },
-      {
-        name: "Website Management",
-        href: "/settings/website",
-        icon: Globe,
-        feature: "WEBSITE_MANAGEMENT",
-      },
-      {
-        name: "API Integration",
-        href: "/settings/integration",
-        icon: Plug,
-        feature: "PUBLIC_API",
-      },
     ],
   },
 ];
@@ -184,7 +183,6 @@ const menu = [
 export default function AppSidebar({ mobile = false }: AppSidebarProps) {
   const pathname = usePathname();
   const features = useERPStore((state) => state.features);
-
   return (
     <aside className="flex h-full w-72 flex-col bg-white border-r border-zinc-200 select-none">
       {/* Desktop Logo */}
@@ -197,7 +195,7 @@ export default function AppSidebar({ mobile = false }: AppSidebarProps) {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto px-4 py-5 scrollbar-thin">
         {menu.map((section) => {
-          const items = section.items.filter((item) => !("feature" in item) || !item.feature || features.includes(item.feature));
+          const items = section.items.filter((item) => !item.feature || features.includes(item.feature));
           if (!items.length) return null;
           return (
           <div key={section.title} className="mb-6 last:mb-2">

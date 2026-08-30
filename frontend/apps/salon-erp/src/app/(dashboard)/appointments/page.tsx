@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppointmentExport, {
   ExportType,
 } from "@/src/components/appointments/AppointmentExport";
@@ -30,6 +31,8 @@ const formatTime = (time: string) =>
   });
 
 export default function AppointmentsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const {
     appointments,
     employees,
@@ -39,7 +42,7 @@ export default function AppointmentsPage() {
     services: catalogServices,
     refresh,
   } = useERPStore();
-  const [search, setSearch] = useState("");
+  const search = searchParams.get("search") ?? "";
   const [employee, setEmployee] = useState("all");
   const [status, setStatus] = useState("all");
   const [source, setSource] = useState("all");
@@ -48,6 +51,11 @@ export default function AppointmentsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentTableItem | null>(null);
+
+  const setSearch = (value: string) => {
+    const query = value.trim();
+    router.replace(query ? `/appointments?search=${encodeURIComponent(query)}` : "/appointments", { scroll: false });
+  };
 
   const filteredAppointments = useMemo(
     () =>
