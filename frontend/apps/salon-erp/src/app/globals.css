@@ -123,33 +123,45 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:not(:disabled),
+  a[href],
+  select:not(:disabled) {
+    @apply cursor-pointer;
+  }
+  :focus-visible {
+    outline: 2px solid oklch(0.35 0 0);
+    outline-offset: 2px;
   }
 }
 
-
-
-
-/* Hide scrollbar */
-
-.hide-scrollbar::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
-
-.hide-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-
-
-
-/* Hide scrollbar */
 
 .hide-scrollbar::-webkit-scrollbar {
   width: 0;

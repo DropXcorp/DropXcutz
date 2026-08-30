@@ -195,19 +195,24 @@ export default function AppointmentCard({
         <div className="mt-5 grid grid-cols-3 gap-3">
 
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
-              console.log("Call Customer");
+              if (appointment.customer.phone) {
+                window.location.href = `tel:${appointment.customer.phone}`;
+              }
             }}
+            disabled={!appointment.customer.phone}
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
             Call
           </button>
 
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
-              console.log("Edit Appointment");
+              onClick?.(appointment);
             }}
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
@@ -215,13 +220,14 @@ export default function AppointmentCard({
           </button>
 
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
-              console.log("Check In");
+              onClick?.(appointment);
             }}
             className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
-            Check In
+            Details
           </button>
 
         </div>

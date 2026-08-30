@@ -33,10 +33,8 @@ import {
   updateInvoice,
   updatePayroll,
 } from "../controllers/operations.controller";
-import { requireAuthenticatedSalonUser } from "../middleware/session.middleware";
-import { requireSalonAdmin } from "../middleware/session.middleware";
+import { requireAuthenticatedSalonUser, requireSalonAdmin } from "../middleware/session.middleware";
 import { requireFeature } from "../middleware/feature.middleware";
-import { createIntegration, getIntegration, rotateIntegrationKey, updateIntegration } from "../controllers/integration.controller";
 import {
   changePassword,
   login,
@@ -51,10 +49,6 @@ salonRouter.use(requireAuthenticatedSalonUser);
 salonRouter.get("/auth/me", me);
 salonRouter.put("/auth/password", changePassword);
 salonRouter.get("/bootstrap", bootstrap);
-salonRouter.get("/integrations/website", requireSalonAdmin, requireFeature("PUBLIC_API"), getIntegration);
-salonRouter.post("/integrations/website", requireSalonAdmin, requireFeature("PUBLIC_API"), createIntegration);
-salonRouter.patch("/integrations/website/:id", requireSalonAdmin, requireFeature("PUBLIC_API"), updateIntegration);
-salonRouter.post("/integrations/website/:id/rotate-key", requireSalonAdmin, requireFeature("PUBLIC_API"), rotateIntegrationKey);
 salonRouter.post("/customers", requireFeature("CUSTOMERS"), createCustomer);
 salonRouter.patch("/customers/:id", requireFeature("CUSTOMERS"), updateCustomer);
 salonRouter.delete("/customers/:id", requireFeature("CUSTOMERS"), deleteCustomer);
@@ -76,7 +70,7 @@ salonRouter.delete("/invoices/:id", requireFeature("INVOICES"), deleteInvoice);
 salonRouter.post("/payroll", requireFeature("PAYROLL"), createPayrollController);
 salonRouter.patch("/payroll/:id", requireFeature("PAYROLL"), updatePayroll);
 salonRouter.delete("/payroll/:id", requireFeature("PAYROLL"), deletePayroll);
-salonRouter.put("/settings", updateSettings);
+salonRouter.put("/settings", requireSalonAdmin, updateSettings);
 salonRouter.get("/notifications", listNotifications);
 salonRouter.patch("/notifications/:id/read", markNotificationRead);
 salonRouter.post("/loyalty/:customerId/adjust", requireFeature("LOYALTY"), adjustLoyalty);
@@ -116,5 +110,3 @@ import { salonAuditLogRouter } from "../modules/salon-audit-logs/salon-audit-log
 salonRouter.use("/salon-audit-logs", salonAuditLogRouter);
 import { membershipRouter } from "../modules/memberships/membership.module";
 salonRouter.use("/memberships", requireFeature("LOYALTY"), membershipRouter);
-import { websiteSettingsRouter } from "../modules/website-settings/website-settings.routes";
-salonRouter.use("/website-settings", websiteSettingsRouter);

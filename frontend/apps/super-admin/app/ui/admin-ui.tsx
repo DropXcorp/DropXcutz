@@ -3,39 +3,26 @@ import Image from "next/image";
 import {
   Activity,
   ArrowUpRight,
-  BarChart3,
   Bell,
   Building2,
-  Calendar,
   CalendarDays,
   Check,
   CircleDollarSign,
   Clock,
-  CreditCard,
   Edit2,
   Eye,
   FileClock,
   KeyRound,
   LayoutDashboard,
-  Lock,
-  Mail,
-  MoreVertical,
-  Phone,
   Plus,
-  RefreshCw,
   Search,
-  Settings,
   ShieldAlert,
-  ShieldCheck,
   LogOut,
   Trash2,
   TrendingUp,
-  UserCheck,
   UserPlus,
   Users,
-  UserX,
   X,
-  Zap,
 } from "lucide-react";
 import React, { useState } from "react";
 
@@ -86,7 +73,7 @@ export type AuditItem = {
   action: string;
   entity: string;
   entityId: string | null;
-  details?: Record<string, any> | null;
+  details?: Record<string, unknown> | null;
   createdAt: string;
 };
 
@@ -844,6 +831,7 @@ export function SubscriptionsView({
   onExtendTrial: (sub: Subscription) => void;
   onUpdateStatus: (salonId: string, status: Status) => void;
 }) {
+  const [now] = useState(() => Date.now());
   return (
     <Panel
       title="Subscription Plans & Accounts"
@@ -864,7 +852,7 @@ export function SubscriptionsView({
         {items.map((x) => {
           let trialDaysLeft = null;
           if (x.trialEndsAt) {
-            const diff = new Date(x.trialEndsAt).getTime() - Date.now();
+            const diff = new Date(x.trialEndsAt).getTime() - now;
             trialDaysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
           }
 
@@ -1772,7 +1760,8 @@ export function ResetPasswordModal({
             <input
               required
               minLength={8}
-              type="text"
+              type="password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter new password"
@@ -1810,11 +1799,9 @@ export function ExtendTrialModal({
   onSubmit: (id: string, date: string) => void;
   submitting: boolean;
 }) {
-  const currentOrTomorrow = subscription.trialEndsAt
+  const [targetDate, setTargetDate] = useState(() => subscription.trialEndsAt
     ? new Date(subscription.trialEndsAt).toISOString().split("T")[0]
-    : new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0];
-
-  const [targetDate, setTargetDate] = useState(currentOrTomorrow);
+    : new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0]);
 
   return (
     <div

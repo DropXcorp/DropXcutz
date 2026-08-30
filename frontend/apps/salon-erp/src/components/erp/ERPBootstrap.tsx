@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { useERPStore, type ERPUser, type ERPSalon } from "@/src/lib/erp-store";
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
@@ -11,17 +11,25 @@ export default function ERPBootstrap({
   children: React.ReactNode;
 }) {
 
-  const { hydrate, loading, hydrated, error, clearError, setIdentity } =
+  const { hydrate, loading, hydrated, error, clearError, resetSession, setIdentity } =
     useERPStore();
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   useEffect(() => {
     if (!error) return;
     toast.error(error);
+    if (/sign in is required|session is invalid|session.*expired/i.test(error)) {
+      void fetch(`${api}/erp/auth/logout`, { method: "POST", credentials: "include" }).finally(() => {
+        resetSession();
+        setMustChangePassword(false);
+        setSignedIn(false);
+      });
+    }
     clearError();
-  }, [error, clearError]);
+  }, [error, clearError, resetSession]);
   const successMessage = useERPStore((state) => state.successMessage);
   const clearSuccess = useERPStore((state) => state.clearSuccess);
   useEffect(() => {
@@ -35,11 +43,14 @@ export default function ERPBootstrap({
         const body = (await response.json().catch(() => null)) as {
           data?: { user?: ERPUser; salon?: ERPSalon | null };
         } | null;
-        if (response.ok && body?.data?.user) {
-          setIdentity(body.data.user, body.data.salon ?? null);
+        const validSalonSession = Boolean(
+          response.ok && body?.data?.user && body.data.salon && body.data.user.role !== "PLATFORM_ADMIN",
+        );
+        if (validSalonSession && body?.data?.user && body.data.salon) {
+          setIdentity(body.data.user, body.data.salon);
           setMustChangePassword(Boolean(body.data.user.mustChangePassword));
         }
-        setSignedIn(response.ok);
+        setSignedIn(validSalonSession);
         setReady(true);
       })
       .catch(() => setReady(true));
@@ -49,41 +60,48 @@ export default function ERPBootstrap({
   }, [signedIn, hydrate]);
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authSubmitting) return;
     const form = new FormData(event.currentTarget);
-    const response = await fetch(`${api}/erp/auth/login`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        email: form.get("email"),
-        password: form.get("password"),
-      }),
-    });
-    if (!response.ok) {
+    setAuthSubmitting(true);
+    setMessage("");
+    try {
+      const response = await fetch(`${api}/erp/auth/login`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
+      });
       const body = (await response.json().catch(() => null)) as {
+        data?: { user?: ERPUser; salon?: ERPSalon | null };
         error?: string;
       } | null;
-      setMessage(body?.error ?? "Unable to sign in.");
-      return;
-    }
-    const body = (await response.json().catch(() => null)) as {
-      data?: { user?: ERPUser; salon?: ERPSalon | null };
-    } | null;
-    if (body?.data?.user) {
-      setIdentity(body.data.user, body.data.salon ?? null);
+      if (!response.ok) {
+        setMessage(body?.error ?? "Unable to sign in.");
+        return;
+      }
+      if (!body?.data?.user || !body.data.salon || body.data.user.role === "PLATFORM_ADMIN") {
+        await fetch(`${api}/erp/auth/logout`, { method: "POST", credentials: "include" });
+        setMessage("This account is for Super Admin. Please use a salon administrator account.");
+        return;
+      }
+      setIdentity(body.data.user, body.data.salon);
       setMustChangePassword(Boolean(body.data.user.mustChangePassword));
+      setSignedIn(true);
+    } catch {
+      setMessage("Unable to reach the server. Check your connection and try again.");
+    } finally {
+      setAuthSubmitting(false);
     }
-    setMessage("");
-    setSignedIn(true);
   }
   if (!ready)
     return (
-      <div className="grid min-h-[60vh] place-items-center text-sm text-zinc-500">
-        Loading...
+      <div className="grid min-h-[60vh] place-items-center text-sm text-zinc-500" role="status">
+        <span className="flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" /> Checking your session…</span>
       </div>
     );
   async function changePassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authSubmitting) return;
     const form = new FormData(event.currentTarget);
     const currentPassword = String(form.get("currentPassword") ?? "");
     const newPassword = String(form.get("newPassword") ?? "");
@@ -96,22 +114,27 @@ export default function ERPBootstrap({
       setMessage("The new passwords do not match.");
       return;
     }
-    const response = await fetch(`${api}/erp/auth/password`, {
-      method: "PUT",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
-    if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-      setMessage(body?.error ?? "Unable to change your password.");
-      return;
+    setAuthSubmitting(true);
+    try {
+      const response = await fetch(`${api}/erp/auth/password`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        setMessage(body?.error ?? "Unable to change your password.");
+        return;
+      }
+      setMessage("");
+      setMustChangePassword(false);
+      await hydrate();
+    } catch {
+      setMessage("Unable to reach the server. Check your connection and try again.");
+    } finally {
+      setAuthSubmitting(false);
     }
-    setMessage("");
-    setMustChangePassword(false);
-    await hydrate();
   }
   if (mustChangePassword)
     return (
@@ -162,8 +185,8 @@ export default function ERPBootstrap({
               className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none focus:border-zinc-900"
             />
           </div>
-          <button className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white">
-            Continue to ERP
+          <button type="submit" aria-busy={authSubmitting} disabled={authSubmitting} className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">
+            {authSubmitting ? "Saving…" : "Continue to ERP"}
           </button>
         </form>
       </div>
@@ -233,8 +256,8 @@ export default function ERPBootstrap({
                 className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none transition focus:border-zinc-950 focus:ring-4 focus:ring-zinc-950/10"
               />
             </label>
-            <button className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800">
-              Sign in to ERP
+            <button type="submit" aria-busy={authSubmitting} disabled={authSubmitting} className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-60">
+              {authSubmitting ? "Signing in…" : "Sign in to ERP"}
             </button>
           </div>
         </motion.form>
@@ -267,8 +290,8 @@ export default function ERPBootstrap({
         </div>
       )}
       {loading && !hydrated ? (
-        <div className="grid min-h-[60vh] place-items-center text-sm text-zinc-500">
-          Loading...
+          <div className="grid min-h-[60vh] place-items-center text-sm text-zinc-500" role="status">
+          <span className="flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" /> Loading your workspace…</span>
         </div>
       ) : (
         children

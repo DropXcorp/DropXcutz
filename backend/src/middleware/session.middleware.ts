@@ -30,12 +30,11 @@ async function sessionFor(request: Request, response: Response) {
     where: { tokenHash: hash(payload.sid) },
     include: { user: { include: { salon: true } } },
   });
-  if (
-    !session ||
-    session.userId !== payload.sub ||
-    session.expiresAt <= new Date() ||
-    !session.user.active
-  )
+  if (session && session.expiresAt <= new Date()) {
+    await prisma.session.delete({ where: { id: session.id } });
+    throw new ApiError(401, "Your session is invalid or expired.");
+  }
+  if (!session || session.userId !== payload.sub || !session.user.active)
     throw new ApiError(401, "Your session is invalid or expired.");
   response.locals.user = session.user;
   response.locals.session = session;
