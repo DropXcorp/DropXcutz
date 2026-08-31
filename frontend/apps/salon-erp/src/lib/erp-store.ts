@@ -101,7 +101,27 @@ export type AttendanceRecord = {
   date: string;
   checkIn: string;
   checkOut?: string | null;
+  branchId?: string | null;
+  totalHours?: number | null;
   status: "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY" | "ON_LEAVE";
+};
+
+export type WebsiteSettings = {
+  type: "NONE" | "TEMPLATE" | "CUSTOM";
+  title?: string | null;
+  description?: string | null;
+  customDomain?: string | null;
+  theme?: Record<string, unknown> | null;
+  updatedAt?: string;
+};
+
+export type SalonIntegration = {
+  id: string;
+  isActive: boolean;
+  allowedDomains: string[];
+  publicKey: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type Supplier = {
@@ -221,7 +241,11 @@ type Snapshot = {
   payroll: PayrollRun[];
   notifications: Notification[];
   settings: SalonSettings;
-  subscription: { plan: string; status: string; expiresAt: string | null } | null;
+  subscription: {
+    plan: string;
+    status: string;
+    expiresAt: string | null;
+  } | null;
   features: string[];
   website: { type: string } | null;
 };
@@ -236,6 +260,8 @@ type ERPState = Snapshot & {
   coupons: Coupon[];
   reviews: Review[];
   purchaseOrders: PurchaseOrder[];
+  websiteSettings: WebsiteSettings | null;
+  integration: SalonIntegration | null;
   currentUser: ERPUser | null;
   currentSalon: ERPSalon | null;
   subscription: Snapshot["subscription"];
@@ -251,42 +277,50 @@ type ERPState = Snapshot & {
   clearSuccess: () => void;
   resetSession: () => void;
   setIdentity: (user: ERPUser, salon: ERPSalon | null) => void;
-  
+
   // Customers
-  addCustomer: (item: Omit<Customer, "id" | "points" | "totalSpend"> & { id?: string }) => Promise<Customer>;
+  addCustomer: (
+    item: Omit<Customer, "id" | "points" | "totalSpend"> & { id?: string },
+  ) => Promise<Customer>;
   updateCustomer: (id: string, item: Partial<Customer>) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
-  adjustLoyalty: (customerId: string, points: number, reason: string) => Promise<void>;
-  
+  adjustLoyalty: (
+    customerId: string,
+    points: number,
+    reason: string,
+  ) => Promise<void>;
+
   // Employees
   addEmployee: (item: Omit<Employee, "id">) => Promise<void>;
   updateEmployee: (id: string, item: Partial<Employee>) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
-  
+
   // Services
   addService: (item: Omit<Service, "id">) => Promise<void>;
   updateService: (id: string, item: Partial<Service>) => Promise<void>;
   deleteService: (id: string) => Promise<void>;
-  
+
   // Inventory
   addInventory: (item: Omit<InventoryItem, "id">) => Promise<void>;
   updateInventory: (id: string, item: Partial<InventoryItem>) => Promise<void>;
   deleteInventory: (id: string) => Promise<void>;
-  
+
   // Appointments
   saveAppointment: (item: AppointmentTableItem) => Promise<void>;
   deleteAppointment: (id: string) => Promise<void>;
-  
+
   // Invoices & Billing
-  addInvoice: (item: Omit<Invoice, "id" | "createdAt" | "invoiceNumber">) => Promise<void>;
+  addInvoice: (
+    item: Omit<Invoice, "id" | "createdAt" | "invoiceNumber">,
+  ) => Promise<void>;
   updateInvoice: (id: string, item: Partial<Invoice>) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
-  
+
   // Payroll
   addPayroll: (item: Omit<PayrollRun, "id">) => Promise<void>;
   updatePayroll: (id: string, item: Partial<PayrollRun>) => Promise<void>;
   deletePayroll: (id: string) => Promise<void>;
-  
+
   // Settings & Notifications
   updateSettings: (settings: SalonSettings) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
@@ -304,7 +338,32 @@ type ERPState = Snapshot & {
   deleteExpense: (id: string) => Promise<void>;
 
   fetchAttendance: () => Promise<void>;
-  recordAttendance: (input: { employeeId: string; status: AttendanceRecord["status"]; date?: string; notes?: string }) => Promise<void>;
+  recordAttendance: (input: {
+    employeeId: string;
+    status: AttendanceRecord["status"];
+    branchId?: string | null;
+    checkIn?: string;
+  }) => Promise<void>;
+  checkOutAttendance: (
+    attendanceId: string,
+    checkOut?: string,
+  ) => Promise<void>;
+  updateAttendance: (
+    id: string,
+    input: Partial<
+      Pick<AttendanceRecord, "checkIn" | "checkOut" | "branchId" | "status">
+    >,
+  ) => Promise<void>;
+
+  fetchWebsiteSettings: () => Promise<void>;
+  saveWebsiteSettings: (input: WebsiteSettings) => Promise<void>;
+  fetchIntegration: () => Promise<void>;
+  createIntegration: (allowedDomains: string[]) => Promise<void>;
+  updateIntegration: (
+    id: string,
+    input: Pick<SalonIntegration, "allowedDomains" | "isActive">,
+  ) => Promise<void>;
+  rotateIntegrationKey: (id: string) => Promise<void>;
 
   fetchSuppliers: () => Promise<void>;
   addSupplier: (item: Omit<Supplier, "id">) => Promise<void>;
@@ -318,7 +377,10 @@ type ERPState = Snapshot & {
 
   fetchMemberships: () => Promise<void>;
   addMembershipPlan: (item: Omit<MembershipPlan, "id">) => Promise<void>;
-  updateMembershipPlan: (id: string, item: Partial<MembershipPlan>) => Promise<void>;
+  updateMembershipPlan: (
+    id: string,
+    item: Partial<MembershipPlan>,
+  ) => Promise<void>;
   deleteMembershipPlan: (id: string) => Promise<void>;
   assignMembership: (customerId: string, planId: string) => Promise<void>;
 
@@ -339,7 +401,7 @@ type ERPState = Snapshot & {
   }) => Promise<void>;
   receivePurchaseOrder: (
     id: string,
-    items: { inventoryItemId: string; quantity: number }[]
+    items: { inventoryItemId: string; quantity: number }[],
   ) => Promise<void>;
 };
 
@@ -373,7 +435,7 @@ const emptySettings: SalonSettings = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
+export async function erpApi<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}/erp${path}`, {
     ...init,
     credentials: "include",
@@ -387,26 +449,41 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
       error?: string;
       details?: Array<{ field?: string; message?: string }>;
     } | null;
-    const details = payload?.details?.map((item) =>
-      `${item.field || "request"}: ${item.message || "invalid value"}`,
-    ).join("; ");
-    throw new Error(details ? `${payload?.error ?? "Request failed."} ${details}` : payload?.error ?? `Request failed (${response.status}).`);
+    const details = payload?.details
+      ?.map(
+        (item) =>
+          `${item.field || "request"}: ${item.message || "invalid value"}`,
+      )
+      .join("; ");
+    throw new Error(
+      details
+        ? `${payload?.error ?? "Request failed."} ${details}`
+        : (payload?.error ?? `Request failed (${response.status}).`),
+    );
   }
   if (response.status === 204) return undefined as T;
   const json = await response.json();
   return (json.data ?? json) as T;
 }
 
+const api = erpApi;
+
 const replace = <T extends { id: string }>(items: T[], item: T) =>
   items.map((current) => (current.id === item.id ? item : current));
 const message = (error: unknown) =>
-  error instanceof Error ? error.message : "The request could not be completed.";
+  error instanceof Error
+    ? error.message
+    : "The request could not be completed.";
 const toList = <T>(res: unknown): T[] => {
   if (Array.isArray(res)) return res;
   if (!res || typeof res !== "object") return [];
   const data = (res as { data?: unknown }).data;
   if (Array.isArray(data)) return data as T[];
-  if (data && typeof data === "object" && Array.isArray((data as { data?: unknown }).data))
+  if (
+    data &&
+    typeof data === "object" &&
+    Array.isArray((data as { data?: unknown }).data)
+  )
     return (data as { data: T[] }).data;
   return [];
 };
@@ -430,6 +507,8 @@ export const useERPStore = create<ERPState>((set, get) => ({
   coupons: [],
   reviews: [],
   purchaseOrders: [],
+  websiteSettings: null,
+  integration: null,
   currentUser: null,
   currentSalon: null,
   subscription: null,
@@ -444,12 +523,35 @@ export const useERPStore = create<ERPState>((set, get) => ({
   clearSuccess: () => set({ successMessage: null }),
   resetSession: () =>
     set({
-      customers: [], employees: [], services: [], inventory: [], appointments: [],
-      invoices: [], payroll: [], notifications: [], branches: [], expenses: [],
-      attendance: [], suppliers: [], packages: [], membershipPlans: [], coupons: [],
-      reviews: [], purchaseOrders: [], currentUser: null, currentSalon: null,
-      subscription: null, features: [], website: null, settings: emptySettings,
-      loading: false, hydrated: false, error: null, successMessage: null,
+      customers: [],
+      employees: [],
+      services: [],
+      inventory: [],
+      appointments: [],
+      invoices: [],
+      payroll: [],
+      notifications: [],
+      branches: [],
+      expenses: [],
+      attendance: [],
+      suppliers: [],
+      packages: [],
+      membershipPlans: [],
+      coupons: [],
+      reviews: [],
+      purchaseOrders: [],
+      websiteSettings: null,
+      integration: null,
+      currentUser: null,
+      currentSalon: null,
+      subscription: null,
+      features: [],
+      website: null,
+      settings: emptySettings,
+      loading: false,
+      hydrated: false,
+      error: null,
+      successMessage: null,
     }),
   setIdentity: (user, salon) => set({ currentUser: user, currentSalon: salon }),
 
@@ -473,6 +575,10 @@ export const useERPStore = create<ERPState>((set, get) => ({
       void get().fetchCoupons();
       void get().fetchReviews();
       void get().fetchPurchaseOrders();
+      if (snapshot.features.includes("WEBSITE_MANAGEMENT"))
+        void get().fetchWebsiteSettings();
+      if (snapshot.features.includes("API_INTEGRATIONS"))
+        void get().fetchIntegration();
     } catch (error) {
       set({ loading: false, error: message(error) });
     }
@@ -723,7 +829,19 @@ export const useERPStore = create<ERPState>((set, get) => ({
       });
       set((state) => ({
         invoices: [item, ...state.invoices],
-        appointments: input.appointmentId ? state.appointments.map((appointment) => appointment.id === input.appointmentId ? { ...appointment, payment: { ...appointment.payment, status: item.status === "Paid" ? "Paid" : "Pending" } } : appointment) : state.appointments,
+        appointments: input.appointmentId
+          ? state.appointments.map((appointment) =>
+              appointment.id === input.appointmentId
+                ? {
+                    ...appointment,
+                    payment: {
+                      ...appointment.payment,
+                      status: item.status === "Paid" ? "Paid" : "Pending",
+                    },
+                  }
+                : appointment,
+            )
+          : state.appointments,
         error: null,
         successMessage: "Invoice generated successfully.",
       }));
@@ -839,7 +957,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
     try {
       const data = await api<unknown>("/branches");
       set({ branches: toList<Branch>(data) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   addBranch: async (input) => {
@@ -874,9 +994,12 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   toggleBranchStatus: async (id, active) => {
     try {
-      const item = await api<Branch>(`/branches/${id}/${active ? "activate" : "deactivate"}`, {
-        method: "PATCH",
-      });
+      const item = await api<Branch>(
+        `/branches/${id}/${active ? "activate" : "deactivate"}`,
+        {
+          method: "PATCH",
+        },
+      );
       set((state) => ({
         branches: replace(state.branches, item),
         successMessage: `Branch ${active ? "activated" : "deactivated"}.`,
@@ -901,7 +1024,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
     try {
       const res = await api<unknown>("/expenses");
       set({ expenses: toList<Expense>(res) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   addExpense: async (input) => {
@@ -949,7 +1074,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
     try {
       const res = await api<unknown>("/attendance");
       set({ attendance: toList<AttendanceRecord>(res) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   recordAttendance: async (input) => {
@@ -965,11 +1092,118 @@ export const useERPStore = create<ERPState>((set, get) => ({
     }
   },
 
+  checkOutAttendance: async (attendanceId, checkOut) => {
+    try {
+      await api("/attendance/check-out", {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceId,
+          ...(checkOut ? { checkOut } : {}),
+        }),
+      });
+      await get().fetchAttendance();
+      set({ successMessage: "Employee checked out." });
+    } catch (error) {
+      set({ error: message(error) });
+    }
+  },
+
+  updateAttendance: async (id, input) => {
+    try {
+      await api<AttendanceRecord>(`/attendance/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      });
+      await get().fetchAttendance();
+      set({ successMessage: "Attendance record updated." });
+    } catch (error) {
+      set({ error: message(error) });
+    }
+  },
+
+  fetchWebsiteSettings: async () => {
+    try {
+      const item = await api<WebsiteSettings | null>("/website-settings");
+      set({ websiteSettings: item });
+    } catch (error) {
+      set({ error: message(error) });
+    }
+  },
+
+  saveWebsiteSettings: async (input) => {
+    try {
+      const item = await api<WebsiteSettings>("/website-settings", {
+        method: "PUT",
+        body: JSON.stringify(input),
+      });
+      set({ websiteSettings: item, successMessage: "Website settings saved." });
+    } catch (error) {
+      set({ error: message(error) });
+    }
+  },
+
+  fetchIntegration: async () => {
+    try {
+      const item = await api<SalonIntegration | null>("/integrations");
+      set({ integration: item });
+    } catch (error) {
+      set({ error: message(error) });
+    }
+  },
+
+  createIntegration: async (allowedDomains) => {
+    try {
+      const item = await api<SalonIntegration>("/integrations", {
+        method: "POST",
+        body: JSON.stringify({ allowedDomains }),
+      });
+      set({
+        integration: item,
+        successMessage:
+          "Integration key created. Save it now; it will be masked after refresh.",
+      });
+    } catch (error) {
+      set({ error: message(error) });
+    }
+  },
+
+  updateIntegration: async (id, input) => {
+    try {
+      const item = await api<SalonIntegration>(`/integrations/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      });
+      set({ integration: item, successMessage: "Integration updated." });
+    } catch (error) {
+      set({ error: message(error) });
+    }
+  },
+
+  rotateIntegrationKey: async (id) => {
+    try {
+      const item = await api<SalonIntegration>(
+        `/integrations/${id}/rotate-key`,
+        {
+          method: "POST",
+        },
+      );
+      set({
+        integration: item,
+        successMessage:
+          "Integration key rotated. Update your external website now.",
+      });
+    } catch (error) {
+      set({ error: message(error) });
+    }
+  },
+
   fetchSuppliers: async () => {
     try {
       const res = await api<unknown>("/suppliers");
       set({ suppliers: toList<Supplier>(res) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   addSupplier: async (input) => {
@@ -1018,7 +1252,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
     try {
       const data = await api<unknown>("/packages");
       set({ packages: toList<Package>(data) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   addPackage: async (input) => {
@@ -1067,7 +1303,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
     try {
       const data = await api<unknown>("/memberships/plans");
       set({ membershipPlans: toList<MembershipPlan>(data) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   addMembershipPlan: async (input) => {
@@ -1128,7 +1366,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
     try {
       const data = await api<unknown>("/coupons");
       set({ coupons: toList<Coupon>(data) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   addCoupon: async (input) => {
@@ -1177,7 +1417,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
     try {
       const data = await api<unknown>("/reviews");
       set({ reviews: toList<Review>(data) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   addReview: async (input) => {
@@ -1200,7 +1442,9 @@ export const useERPStore = create<ERPState>((set, get) => ({
     try {
       const data = await api<unknown>("/purchase-orders");
       set({ purchaseOrders: toList<PurchaseOrder>(data) });
-    } catch (error) { set({ error: message(error) }); }
+    } catch (error) {
+      set({ error: message(error) });
+    }
   },
 
   addPurchaseOrder: async (input) => {

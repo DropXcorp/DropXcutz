@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import WebsiteSettingsPanel from "@/src/components/settings/WebsiteSettingsPanel";
 
 export default function WebsiteSettingsPage() {
-  redirect("/dashboard");
+  return <WebsiteSettingsPanel />;
 }

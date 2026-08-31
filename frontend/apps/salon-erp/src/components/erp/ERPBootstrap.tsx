@@ -10,9 +10,15 @@ export default function ERPBootstrap({
 }: {
   children: React.ReactNode;
 }) {
-
-  const { hydrate, loading, hydrated, error, clearError, resetSession, setIdentity } =
-    useERPStore();
+  const {
+    hydrate,
+    loading,
+    hydrated,
+    error,
+    clearError,
+    resetSession,
+    setIdentity,
+  } = useERPStore();
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
@@ -21,8 +27,13 @@ export default function ERPBootstrap({
   useEffect(() => {
     if (!error) return;
     toast.error(error);
-    if (/sign in is required|session is invalid|session.*expired/i.test(error)) {
-      void fetch(`${api}/erp/auth/logout`, { method: "POST", credentials: "include" }).finally(() => {
+    if (
+      /sign in is required|session is invalid|session.*expired/i.test(error)
+    ) {
+      void fetch(`${api}/erp/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      }).finally(() => {
         resetSession();
         setMustChangePassword(false);
         setSignedIn(false);
@@ -44,7 +55,10 @@ export default function ERPBootstrap({
           data?: { user?: ERPUser; salon?: ERPSalon | null };
         } | null;
         const validSalonSession = Boolean(
-          response.ok && body?.data?.user && body.data.salon && body.data.user.role !== "PLATFORM_ADMIN",
+          response.ok &&
+          body?.data?.user &&
+          body.data.salon &&
+          body.data.user.role !== "PLATFORM_ADMIN",
         );
         if (validSalonSession && body?.data?.user && body.data.salon) {
           setIdentity(body.data.user, body.data.salon);
@@ -69,7 +83,10 @@ export default function ERPBootstrap({
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
+        body: JSON.stringify({
+          email: form.get("email"),
+          password: form.get("password"),
+        }),
       });
       const body = (await response.json().catch(() => null)) as {
         data?: { user?: ERPUser; salon?: ERPSalon | null };
@@ -79,24 +96,41 @@ export default function ERPBootstrap({
         setMessage(body?.error ?? "Unable to sign in.");
         return;
       }
-      if (!body?.data?.user || !body.data.salon || body.data.user.role === "PLATFORM_ADMIN") {
-        await fetch(`${api}/erp/auth/logout`, { method: "POST", credentials: "include" });
-        setMessage("This account is for Super Admin. Please use a salon administrator account.");
+      if (
+        !body?.data?.user ||
+        !body.data.salon ||
+        body.data.user.role === "PLATFORM_ADMIN"
+      ) {
+        await fetch(`${api}/erp/auth/logout`, {
+          method: "POST",
+          credentials: "include",
+        });
+        setMessage(
+          "This account is for Super Admin. Please use a salon administrator account.",
+        );
         return;
       }
       setIdentity(body.data.user, body.data.salon);
       setMustChangePassword(Boolean(body.data.user.mustChangePassword));
       setSignedIn(true);
     } catch {
-      setMessage("Unable to reach the server. Check your connection and try again.");
+      setMessage(
+        "Unable to reach the server. Check your connection and try again.",
+      );
     } finally {
       setAuthSubmitting(false);
     }
   }
   if (!ready)
     return (
-      <div className="grid min-h-[60vh] place-items-center text-sm text-zinc-500" role="status">
-        <span className="flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" /> Checking your session…</span>
+      <div
+        className="grid min-h-[60vh] place-items-center text-sm text-zinc-500"
+        role="status"
+      >
+        <span className="flex items-center gap-2">
+          <LoaderCircle className="h-4 w-4 animate-spin" /> Checking your
+          session…
+        </span>
       </div>
     );
   async function changePassword(event: React.FormEvent<HTMLFormElement>) {
@@ -123,7 +157,9 @@ export default function ERPBootstrap({
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         setMessage(body?.error ?? "Unable to change your password.");
         return;
       }
@@ -131,7 +167,9 @@ export default function ERPBootstrap({
       setMustChangePassword(false);
       await hydrate();
     } catch {
-      setMessage("Unable to reach the server. Check your connection and try again.");
+      setMessage(
+        "Unable to reach the server. Check your connection and try again.",
+      );
     } finally {
       setAuthSubmitting(false);
     }
@@ -185,7 +223,12 @@ export default function ERPBootstrap({
               className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none focus:border-zinc-900"
             />
           </div>
-          <button type="submit" aria-busy={authSubmitting} disabled={authSubmitting} className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">
+          <button
+            type="submit"
+            aria-busy={authSubmitting}
+            disabled={authSubmitting}
+            className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60"
+          >
             {authSubmitting ? "Saving…" : "Continue to ERP"}
           </button>
         </form>
@@ -256,7 +299,12 @@ export default function ERPBootstrap({
                 className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none transition focus:border-zinc-950 focus:ring-4 focus:ring-zinc-950/10"
               />
             </label>
-            <button type="submit" aria-busy={authSubmitting} disabled={authSubmitting} className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-60">
+            <button
+              type="submit"
+              aria-busy={authSubmitting}
+              disabled={authSubmitting}
+              className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-60"
+            >
               {authSubmitting ? "Signing in…" : "Sign in to ERP"}
             </button>
           </div>
@@ -270,11 +318,16 @@ export default function ERPBootstrap({
         <div className="flex items-center justify-between bg-red-600 px-4 py-2 text-sm text-white shadow-sm">
           <div className="flex items-center gap-3">
             <span>{error}</span>
-            {error.includes("unavailable") || error.includes("session") || error.includes("Sign in") ? (
+            {error.includes("unavailable") ||
+            error.includes("session") ||
+            error.includes("Sign in") ? (
               <button
                 type="button"
                 onClick={async () => {
-                  await fetch(`${api}/erp/auth/logout`, { method: "POST", credentials: "include" });
+                  await fetch(`${api}/erp/auth/logout`, {
+                    method: "POST",
+                    credentials: "include",
+                  });
                   setSignedIn(false);
                   clearError();
                 }}
@@ -284,14 +337,25 @@ export default function ERPBootstrap({
               </button>
             ) : null}
           </div>
-          <button type="button" onClick={clearError} aria-label="Dismiss error" className="hover:opacity-80">
+          <button
+            type="button"
+            onClick={clearError}
+            aria-label="Dismiss error"
+            className="hover:opacity-80"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
       )}
       {loading && !hydrated ? (
-          <div className="grid min-h-[60vh] place-items-center text-sm text-zinc-500" role="status">
-          <span className="flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" /> Loading your workspace…</span>
+        <div
+          className="grid min-h-[60vh] place-items-center text-sm text-zinc-500"
+          role="status"
+        >
+          <span className="flex items-center gap-2">
+            <LoaderCircle className="h-4 w-4 animate-spin" /> Loading your
+            workspace…
+          </span>
         </div>
       ) : (
         children

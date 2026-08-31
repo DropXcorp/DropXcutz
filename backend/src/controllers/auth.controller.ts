@@ -51,6 +51,14 @@ const cookie = (name: string, token: string, maxAge: number) => {
 export async function login(request: Request, response: Response) {
   const scope = sessionScope(request);
   const { email, password } = loginInput.parse(request.body);
+  const twoFactorCode = z
+    .object({
+      twoFactorCode: z
+        .string()
+        .regex(/^\d{6}$/)
+        .optional(),
+    })
+    .parse(request.body).twoFactorCode;
   const user = await prisma.user.findUnique({
     where: { email },
     include: { salon: true },
@@ -64,14 +72,42 @@ export async function login(request: Request, response: Response) {
     !(await bcrypt.compare(password, user.passwordHash))
   );
   if (!validCredentials) {
-    if (user) await prisma.loginHistory.create({ data: { userId: user.id, ipAddress: request.ip, userAgent: request.header("user-agent") ?? null, succeeded: false } });
+    if (user)
+      await prisma.loginHistory.create({
+        data: {
+          userId: user.id,
+          ipAddress: request.ip,
+          userAgent: request.header("user-agent") ?? null,
+          succeeded: false,
+        },
+      });
     throw new ApiError(401, "Invalid email or password.");
+  }
+  if (
+    scope === "platform" &&
+    user.twoFactorEnabled &&
+    (!user.twoFactorSecret ||
+      !twoFactorCode ||
+      !verifyTotp(user.twoFactorSecret, twoFactorCode))
+  ) {
+    await prisma.loginHistory.create({
+      data: {
+        userId: user.id,
+        ipAddress: request.ip,
+        userAgent: request.header("user-agent") ?? null,
+        succeeded: false,
+      },
+    });
+    throw new ApiError(401, "A valid authenticator code is required.");
   }
   const platformSettings = await prisma.platformSettings.findUnique({
     where: { id: "platform" },
     select: { sessionHours: true },
   });
-  const sessionHours = Math.min(Math.max(platformSettings?.sessionHours ?? 8, 1), 720);
+  const sessionHours = Math.min(
+    Math.max(platformSettings?.sessionHours ?? 8, 1),
+    720,
+  );
   const sessionSeconds = sessionHours * 60 * 60;
   const sessionId = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionSeconds * 1000);
@@ -81,11 +117,27 @@ export async function login(request: Request, response: Response) {
     { expiresIn: sessionSeconds },
   );
   await prisma.session.create({
-    data: { userId: user.id, tokenHash: tokenHash(sessionId), expiresAt, ipAddress: request.ip, userAgent: request.header("user-agent") ?? null },
+    data: {
+      userId: user.id,
+      tokenHash: tokenHash(sessionId),
+      expiresAt,
+      ipAddress: request.ip,
+      userAgent: request.header("user-agent") ?? null,
+    },
   });
-  await prisma.loginHistory.create({ data: { userId: user.id, ipAddress: request.ip, userAgent: request.header("user-agent") ?? null, succeeded: true } });
+  await prisma.loginHistory.create({
+    data: {
+      userId: user.id,
+      ipAddress: request.ip,
+      userAgent: request.header("user-agent") ?? null,
+      succeeded: true,
+    },
+  });
   void prisma.session.deleteMany({ where: { expiresAt: { lte: new Date() } } });
-  response.setHeader("Set-Cookie", cookie(cookieNames[scope], token, sessionSeconds));
+  response.setHeader(
+    "Set-Cookie",
+    cookie(cookieNames[scope], token, sessionSeconds),
+  );
   ok(response, {
     user: {
       id: user.id,
@@ -103,30 +155,65 @@ export async function login(request: Request, response: Response) {
 export async function startTwoFactor(_request: Request, response: Response) {
   const user = response.locals.user;
   const secret = createTotpSecret();
-  await prisma.user.update({ where: { id: user.id }, data: { twoFactorSecret: secret, twoFactorEnabled: false } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { twoFactorSecret: secret, twoFactorEnabled: false },
+  });
   const issuer = "DropXCutz";
   const label = encodeURIComponent(`${issuer}:${user.email ?? user.name}`);
-  ok(response, { secret, otpauthUrl: `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30` });
+  ok(response, {
+    secret,
+    otpauthUrl: `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`,
+  });
 }
 
 export async function confirmTwoFactor(request: Request, response: Response) {
-  const code = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(request.body).code;
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: response.locals.user.id }, select: { twoFactorSecret: true } });
-  if (!user.twoFactorSecret || !verifyTotp(user.twoFactorSecret, code)) throw new ApiError(400, "The verification code is invalid.");
-  await prisma.user.update({ where: { id: response.locals.user.id }, data: { twoFactorEnabled: true } });
+  const code = z
+    .object({ code: z.string().regex(/^\d{6}$/) })
+    .parse(request.body).code;
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: response.locals.user.id },
+    select: { twoFactorSecret: true },
+  });
+  if (!user.twoFactorSecret || !verifyTotp(user.twoFactorSecret, code))
+    throw new ApiError(400, "The verification code is invalid.");
+  await prisma.user.update({
+    where: { id: response.locals.user.id },
+    data: { twoFactorEnabled: true },
+  });
   response.status(204).end();
 }
 
 export async function disableTwoFactor(request: Request, response: Response) {
-  const code = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(request.body).code;
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: response.locals.user.id }, select: { twoFactorSecret: true, twoFactorEnabled: true } });
-  if (!user.twoFactorEnabled || !user.twoFactorSecret || !verifyTotp(user.twoFactorSecret, code)) throw new ApiError(400, "The verification code is invalid.");
-  await prisma.user.update({ where: { id: response.locals.user.id }, data: { twoFactorEnabled: false, twoFactorSecret: null } });
+  const code = z
+    .object({ code: z.string().regex(/^\d{6}$/) })
+    .parse(request.body).code;
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: response.locals.user.id },
+    select: { twoFactorSecret: true, twoFactorEnabled: true },
+  });
+  if (
+    !user.twoFactorEnabled ||
+    !user.twoFactorSecret ||
+    !verifyTotp(user.twoFactorSecret, code)
+  )
+    throw new ApiError(400, "The verification code is invalid.");
+  await prisma.user.update({
+    where: { id: response.locals.user.id },
+    data: { twoFactorEnabled: false, twoFactorSecret: null },
+  });
   response.status(204).end();
 }
 
 export async function listLoginHistory(_request: Request, response: Response) {
-  ok(response, await prisma.loginHistory.findMany({ where: { userId: response.locals.user.id }, orderBy: { createdAt: "desc" }, take: 100 }));
+  ok(
+    response,
+    await prisma.loginHistory.findMany({
+      where: { userId: response.locals.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+  );
 }
 
 export async function logout(request: Request, response: Response) {
