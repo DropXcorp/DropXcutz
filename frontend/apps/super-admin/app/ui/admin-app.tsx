@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   BarChart3,
   Bell,
@@ -22,7 +23,6 @@ import {
   CreateUserModal,
   EditSalonModal,
   ExtendTrialModal,
-  FinancialView,
   FullPageLoader,
   Navigation,
   Notice,
@@ -38,6 +38,8 @@ import {
   SubscriptionsView,
   UsersView,
 } from "./admin-ui";
+import { OperationsConsole } from "./operations-console";
+import { ReportsConsole } from "./reports-console";
 import type {
   AuditItem,
   OverviewData,
@@ -102,6 +104,7 @@ const copy: Record<Section, string> = {
   Settings: "Configure security policies, session longevity, and platform defaults.",
   Notifications: "Broadcast system alerts directly into salon ERP dashboards.",
   Financials: "Platform-wide billing volume and per-salon revenue performance.",
+  Operations: "Billing, support, access controls, security, and bulk salon updates.",
 };
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -158,6 +161,7 @@ export default function AdminApp() {
   const [extendingSubscription, setExtendingSubscription] = useState<Subscription | null>(null);
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [resettingUser, setResettingUser] = useState<PlatformUser | null>(null);
+  const [platformRoles, setPlatformRoles] = useState<Array<{ id: string; name: string }>>([]);
 
   const [temporaryPassword, setTemporaryPassword] = useState(generateTemporaryPassword);
 
@@ -196,6 +200,18 @@ export default function AdminApp() {
   }, [load]);
 
   useEffect(() => {
+    if (!success) return;
+    const timer = window.setTimeout(() => setSuccess(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [success]);
+
+  useEffect(() => {
+    if (!error || !auth) return;
+    const timer = window.setTimeout(() => setError(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [error, auth]);
+
+  useEffect(() => {
     if (!auth) return;
 
     if (section === "Overview") {
@@ -212,7 +228,7 @@ export default function AdminApp() {
       return;
     }
 
-    if (section === "Salons" || section === "Financials" || section === "Notifications") {
+    if (section === "Salons" || section === "Financials" || section === "Notifications" || section === "Operations") {
       setData(null);
       return;
     }
@@ -224,6 +240,11 @@ export default function AdminApp() {
     void api(`/api/platform/${resource}`)
       .then((x) => {
         if (active) setData(x);
+        if (section === "Users") {
+          void api<Array<{ id: string; name: string }>>("/api/platform/roles")
+            .then((roles) => { if (active) setPlatformRoles(roles); })
+            .catch((roleError) => { if (active) setError(roleError instanceof Error ? roleError.message : "Could not load platform roles."); });
+        }
       })
       .catch((e) => {
         if (active)
@@ -409,6 +430,23 @@ export default function AdminApp() {
     }
   }
 
+  async function handleRestoreSalon(salon: Salon) {
+    if (!confirm(`Restore "${salon.salonName}" as a suspended salon?`)) return;
+    setSubmitting(true);
+    setActionLabel(`Restoring ${salon.salonName}…`);
+    setError("");
+    try {
+      await api(`/api/platform/salons/${salon.id}/restore`, { method: "POST" });
+      setSuccess(`Salon "${salon.salonName}" restored as suspended.`);
+      await load();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not restore salon.");
+    } finally {
+      setSubmitting(false);
+      setActionLabel("");
+    }
+  }
+
   async function handleUpgradePlan(sub: Subscription, newPlan: string) {
     setSubmitting(true);
     setActionLabel(`Updating ${sub.salonName} plan…`);
@@ -454,6 +492,7 @@ export default function AdminApp() {
     password: string;
     role: string;
     salonId?: string;
+    platformRoleId?: string;
   }) {
     setSubmitting(true);
     setActionLabel("Creating user…");
@@ -472,6 +511,26 @@ export default function AdminApp() {
       setSubmitting(false);
       setActionLabel("");
     }
+  }
+
+  async function openCreateUser() {
+    try {
+      setPlatformRoles(await api<Array<{ id: string; name: string }>>("/api/platform/roles"));
+      setCreateUserOpen(true);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not load platform roles.");
+    }
+  }
+
+  async function assignPlatformRole(user: PlatformUser, platformRoleId: string | null) {
+    setSubmitting(true);
+    try {
+      const updated = await api<PlatformUser>(`/api/platform/users/${user.id}`, { method: "PATCH", body: JSON.stringify({ platformRoleId }) });
+      setData(list<PlatformUser>(data).map((item) => item.id === updated.id ? updated : item));
+      setSuccess("Platform role updated.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update platform role.");
+    } finally { setSubmitting(false); }
   }
 
   async function handleResetPassword(id: string, newPass: string) {
@@ -580,6 +639,7 @@ export default function AdminApp() {
     [Settings, "Settings"],
     [Bell, "Notifications"],
     [BarChart3, "Financials"],
+    [Settings, "Operations"],
   ] as const;
 
   const choose = (s: Section) => {
@@ -601,7 +661,49 @@ export default function AdminApp() {
     );
 
   return (
-    <main className="min-h-screen bg-zinc-100 text-zinc-950">
+    <main className="min-h-screen bg-[#f7f8fa] text-slate-950">
+      <div
+        aria-live="polite"
+        className="fixed right-4 top-4 z-[100] w-[calc(100%-2rem)] max-w-md space-y-3 sm:right-6 sm:top-6"
+      >
+        <AnimatePresence initial={false}>
+          {submitting && actionLabel && (
+            <motion.div
+              key="progress"
+              initial={{ opacity: 0, x: 24, y: -8 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, x: 24, y: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              role="status"
+              className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 shadow-lg"
+            >
+              {actionLabel}
+            </motion.div>
+          )}
+          {error && (
+            <motion.div
+              key={`error-${error}`}
+              initial={{ opacity: 0, x: 24, y: -8 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, x: 24, y: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <Notice type="error" message={error} onClose={() => setError("")} />
+            </motion.div>
+          )}
+          {success && (
+            <motion.div
+              key={`success-${success}`}
+              initial={{ opacity: 0, x: 24, y: -8 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, x: 24, y: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <Notice type="success" message={success} onClose={() => setSuccess("")} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-zinc-200 bg-white lg:flex lg:flex-col shadow-sm">
         <div className="p-6 pb-3">
           <Brand />
@@ -664,26 +766,6 @@ export default function AdminApp() {
         <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
           <SectionHeading title={section} subtitle={copy[section]} />
           <div className="mt-6 space-y-6">
-            {submitting && actionLabel && (
-              <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
-                {actionLabel}
-              </div>
-            )}
-            {error && (
-              <Notice
-                type="error"
-                message={error}
-                onClose={() => setError("")}
-              />
-            )}
-            {success && (
-              <Notice
-                type="success"
-                message={success}
-                onClose={() => setSuccess("")}
-              />
-            )}
-
             {section === "Overview" && (
               <Overview
                 overview={overview}
@@ -703,6 +785,7 @@ export default function AdminApp() {
                 onEdit={setEditingSalon}
                 onUpdateStatus={handleUpdateSalonStatus}
                 onDelete={handleDeleteSalon}
+                onRestore={handleRestoreSalon}
                 onViewDetails={setViewingSalon}
               />
             )}
@@ -740,8 +823,10 @@ export default function AdminApp() {
                 items={list<PlatformUser>(data)}
                 loading={sectionLoading}
                 onToggle={toggleUser}
-                onCreateUser={() => setCreateUserOpen(true)}
+                onCreateUser={openCreateUser}
                 onResetPassword={setResettingUser}
+                roles={platformRoles}
+                onAssignPlatformRole={assignPlatformRole}
               />
             )}
 
@@ -752,7 +837,9 @@ export default function AdminApp() {
               />
             )}
 
-            {section === "Financials" && <FinancialView salons={salons} />}
+            {section === "Financials" && <ReportsConsole request={api} />}
+
+            {section === "Operations" && <OperationsConsole salons={salons} request={api} onRefresh={load} />}
 
             {section === "Notifications" && (
               <NotificationView
@@ -820,6 +907,7 @@ export default function AdminApp() {
       {createUserOpen && (
         <CreateUserModal
           salons={salons}
+          roles={platformRoles}
           onClose={() => setCreateUserOpen(false)}
           onSubmit={handleCreateUser}
           submitting={submitting}
