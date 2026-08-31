@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import IntegrationSettingsPanel from "@/src/components/settings/IntegrationSettingsPanel";
 
 export default function WebsiteIntegrationPage() {
-  redirect("/dashboard");
+  return <IntegrationSettingsPanel />;
 }

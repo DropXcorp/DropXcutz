@@ -1335,7 +1335,7 @@ function BranchesView() {
 // 8. ATTENDANCE VIEW
 // -------------------------------------------------------------
 function AttendanceView() {
-  const { attendance, employees, recordAttendance } = useERPStore();
+  const { attendance, employees, branches, recordAttendance, checkOutAttendance, updateAttendance } = useERPStore();
 
   return (
     <div className="space-y-6">
@@ -1347,9 +1347,10 @@ function AttendanceView() {
             await submitAndReset(e.currentTarget, () => recordAttendance({
               employeeId: String(form.get("employeeId")),
               status: form.get("status") as AttendanceRecord["status"],
+              branchId: String(form.get("branchId") || "") || null,
             }));
           }}
-          className="grid gap-3 p-5 sm:grid-cols-3"
+          className="grid gap-3 p-5 sm:grid-cols-4"
         >
           <select required name="employeeId" className={inputClass}>
             <option value="">Select Employee...</option>
@@ -1365,39 +1366,40 @@ function AttendanceView() {
             <option value="HALF_DAY">Half Day</option>
             <option value="ON_LEAVE">On Leave</option>
           </select>
+          <select name="branchId" className={inputClass}>
+            <option value="">Primary salon location</option>
+            {branches.filter((branch) => branch.status === "ACTIVE").map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+          </select>
           <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
             <Plus className="h-4 w-4" /> Record Check-In
           </button>
         </form>
       </SectionPanel>
 
-      <SectionPanel title="Today's Attendance Logs" subtitle="Staff clock-in records">
-        <DataTable heads={["Staff Name", "Date / Time", "Status"]}>
+      <SectionPanel title="Attendance Logs" subtitle="Check employees out, correct status, and review shift hours">
+        <DataTable heads={["Staff Name", "Check in", "Check out", "Hours", "Status", "Actions"]}>
           {attendance.map((a) => {
             const emp = employees.find((e) => e.id === a.employeeId);
             return (
               <tr key={a.id} className="hover:bg-zinc-50/50">
                 <td className="px-6 py-3.5 font-medium text-zinc-900">{emp?.name ?? a.employeeName ?? "Staff"}</td>
-                <td className="px-6 py-3.5 text-zinc-500">{new Date(a.date || a.checkIn).toLocaleString("en-IN")}</td>
+                <td className="px-6 py-3.5 text-zinc-500">{new Date(a.checkIn).toLocaleString("en-IN")}</td>
+                <td className="px-6 py-3.5 text-zinc-500">{a.checkOut ? new Date(a.checkOut).toLocaleString("en-IN") : "Still on shift"}</td>
+                <td className="px-6 py-3.5 text-zinc-700">{a.totalHours == null ? "—" : `${a.totalHours.toFixed(2)} h`}</td>
                 <td className="px-6 py-3.5">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      a.status === "PRESENT"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : a.status === "LATE"
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-zinc-100 text-zinc-700"
-                    }`}
-                  >
-                    {a.status}
-                  </span>
+                  <select value={a.status} onChange={(event) => void updateAttendance(a.id, { status: event.target.value as AttendanceRecord["status"] })} className={`${inputClass} min-w-28 py-1 text-xs`}>
+                    <option value="PRESENT">Present</option><option value="LATE">Late</option><option value="HALF_DAY">Half Day</option><option value="ABSENT">Absent</option><option value="ON_LEAVE">On Leave</option>
+                  </select>
+                </td>
+                <td className="px-6 py-3.5 text-right">
+                  {!a.checkOut && <button type="button" onClick={() => void checkOutAttendance(a.id)} className="rounded-xl bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800">Check out now</button>}
                 </td>
               </tr>
             );
           })}
           {attendance.length === 0 && (
             <tr>
-              <td colSpan={3} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
                 No attendance recorded today.
               </td>
             </tr>
@@ -3002,7 +3004,7 @@ function PurchaseOrdersView() {
   const [unitCost, setUnitCost] = useState(100);
 
   const [receivingOrderId, setReceivingOrderId] = useState<string | null>(null);
-  const [receiveQty, setReceiveQty] = useState(0);
+  const [receiptQuantities, setReceiptQuantities] = useState<Record<string, number>>({});
 
   const pendingOrders = purchaseOrders.filter((po) => po.status === "PENDING" || po.status === "PARTIALLY_RECEIVED");
 
@@ -3177,49 +3179,41 @@ function PurchaseOrdersView() {
                   {canReceive && (
                     <div className="flex items-center justify-end gap-2">
                       {isReceiving ? (
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min="1"
-                            value={receiveQty}
-                            onChange={(e) => setReceiveQty(Number(e.target.value))}
-                            placeholder="Qty"
-                            className={`${inputClass} py-1 text-xs w-16`}
-                          />
+                        <div className="w-72 space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-left">
+                          <p className="text-xs font-semibold text-zinc-700">Receive each delivered item</p>
+                          {po.items.map((item) => {
+                            const remaining = item.quantity - (item.receivedQuantity || 0);
+                            const inv = inventory.find((entry) => entry.id === item.inventoryItemId);
+                            return <label key={item.inventoryItemId} className="flex items-center justify-between gap-2 text-xs text-zinc-600"><span className="min-w-0 truncate">{inv?.name ?? "Item"} <b>({remaining} left)</b></span><input type="number" min="0" max={remaining} value={receiptQuantities[item.inventoryItemId] ?? 0} onChange={(event) => setReceiptQuantities((current) => ({ ...current, [item.inventoryItemId]: Math.max(0, Math.min(remaining, Number(event.target.value) || 0)) }))} className={`${inputClass} w-16 px-2 py-1 text-xs`} /></label>;
+                          })}
+                          <div className="flex justify-end gap-1.5 pt-1">
                           <button
                             type="button"
                             onClick={async () => {
-                              const firstItem = po.items?.[0];
-                              if (firstItem && receiveQty > 0) {
-                                await receivePurchaseOrder(po.id, [
-                                  {
-                                    inventoryItemId: firstItem.inventoryItemId,
-                                    quantity: receiveQty,
-                                  },
-                                ]);
-                              }
-                              setReceivingOrderId(null);
+                              const items = po.items.map((item) => ({ inventoryItemId: item.inventoryItemId, quantity: receiptQuantities[item.inventoryItemId] ?? 0 })).filter((item) => item.quantity > 0);
+                              if (!items.length) return;
+                              await receivePurchaseOrder(po.id, items);
+                              setReceivingOrderId(null); setReceiptQuantities({});
                             }}
                             className="rounded-lg bg-emerald-600 text-white px-2.5 py-1 text-xs font-semibold hover:bg-emerald-700"
                           >
-                            Receive
+                            Receive selected
                           </button>
                           <button
                             type="button"
-                            onClick={() => setReceivingOrderId(null)}
+                            onClick={() => { setReceivingOrderId(null); setReceiptQuantities({}); }}
                             className="rounded-lg bg-zinc-100 text-zinc-600 px-2 py-1 text-xs hover:bg-zinc-200"
                           >
                             Cancel
                           </button>
+                          </div>
                         </div>
                       ) : (
                         <button
                           type="button"
                           onClick={() => {
                             setReceivingOrderId(po.id);
-                            const firstItem = po.items?.[0];
-                            const remaining = (firstItem?.quantity || 0) - (firstItem?.receivedQuantity || 0);
-                            setReceiveQty(Math.max(1, remaining));
+                            setReceiptQuantities(Object.fromEntries(po.items.map((item) => [item.inventoryItemId, Math.max(0, item.quantity - (item.receivedQuantity || 0))])));
                           }}
                           className="inline-flex items-center gap-1 rounded-xl bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
                         >

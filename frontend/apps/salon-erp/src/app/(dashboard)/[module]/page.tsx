@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import ERPModuleClient from "@/src/components/erp/ERPModuleClient";
+import PhaseTwoConsole, { type PhaseTwoModule } from "@/src/components/erp/PhaseTwoConsole";
 
 const modules = [
   "customers",
@@ -22,6 +23,12 @@ const modules = [
   "reviews",
   "memberships",
   "purchase-orders",
+  "service-setup",
+  "leave",
+  "payments",
+  "marketing",
+  "time-slots",
+  "audit-log",
 ] as const;
 
 export function generateStaticParams() {
@@ -35,5 +42,7 @@ export default async function ModulePage({
 }) {
   const { module } = await params;
   if (!modules.includes(module as (typeof modules)[number])) notFound();
-  return <ERPModuleClient module={module as (typeof modules)[number]} />;
+  if (["service-setup", "leave", "payments", "marketing", "time-slots", "audit-log"].includes(module))
+    return <PhaseTwoConsole module={module as PhaseTwoModule} />;
+  return <ERPModuleClient module={module as Parameters<typeof ERPModuleClient>[0]["module"]} />;
 }

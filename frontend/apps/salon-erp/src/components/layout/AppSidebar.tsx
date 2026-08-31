@@ -25,6 +25,8 @@ import {
   UserCircle,
   ShoppingCart,
   Crown,
+  Globe,
+  KeyRound,
 } from "lucide-react";
 
 import AppLogo from "@/src/components/layout/AppLogo";
@@ -68,6 +70,12 @@ const menu = [
         feature: "SERVICES",
       },
       {
+        name: "Service Setup",
+        href: "/service-setup",
+        icon: Scissors,
+        feature: "SERVICES",
+      },
+      {
         name: "Billing & POS",
         href: "/billing",
         icon: Receipt,
@@ -81,6 +89,12 @@ const menu = [
       {
         name: "Attendance",
         href: "/attendance",
+        icon: CalendarCheck,
+        feature: "EMPLOYEES",
+      },
+      {
+        name: "Leave Requests",
+        href: "/leave",
         icon: CalendarCheck,
         feature: "EMPLOYEES",
       },
@@ -112,6 +126,12 @@ const menu = [
         href: "/payroll",
         icon: Wallet,
         feature: "PAYROLL",
+      },
+      {
+        name: "Payments",
+        href: "/payments",
+        icon: Receipt,
+        feature: "INVOICES",
       },
     ],
   },
@@ -145,6 +165,11 @@ const menu = [
         href: "/reviews",
         icon: Star,
       },
+      {
+        name: "Offers & Gallery",
+        href: "/marketing",
+        icon: Tag,
+      },
     ],
   },
   {
@@ -162,6 +187,17 @@ const menu = [
         feature: "MULTI_BRANCH",
       },
       {
+        name: "Time Slots",
+        href: "/time-slots",
+        icon: CalendarDays,
+        feature: "MULTI_BRANCH",
+      },
+      {
+        name: "Audit Log",
+        href: "/audit-log",
+        icon: BarChart3,
+      },
+      {
         name: "Notifications",
         href: "/notifications",
         icon: Bell,
@@ -170,6 +206,18 @@ const menu = [
         name: "Settings",
         href: "/settings",
         icon: Settings,
+      },
+      {
+        name: "Website",
+        href: "/settings/website",
+        icon: Globe,
+        feature: "WEBSITE_MANAGEMENT",
+      },
+      {
+        name: "Integrations",
+        href: "/settings/integration",
+        icon: KeyRound,
+        feature: "API_INTEGRATIONS",
       },
       {
         name: "Profile",

@@ -33,24 +33,37 @@ export async function createRazorpayPaymentLink(input: {
       reference_id: input.referenceId,
       description: input.description,
       customer: input.customer,
-      expire_by: input.expiresAt ? Math.floor(input.expiresAt.getTime() / 1000) : undefined,
+      expire_by: input.expiresAt
+        ? Math.floor(input.expiresAt.getTime() / 1000)
+        : undefined,
       // Do not deliver through email/SMS/WhatsApp; the platform operator shares the URL.
       notify: { sms: false, email: false },
       reminder_enable: false,
     }),
   });
-  const payload = (await response.json().catch(() => ({}))) as RazorpayPaymentLink & {
+  const payload = (await response
+    .json()
+    .catch(() => ({}))) as RazorpayPaymentLink & {
     error?: { description?: string };
   };
   if (!response.ok || !payload.id || !payload.short_url) {
-    throw new ApiError(502, payload.error?.description ?? "Razorpay could not create a payment link.");
+    throw new ApiError(
+      502,
+      payload.error?.description ?? "Razorpay could not create a payment link.",
+    );
   }
   return payload;
 }
 
-export function verifyRazorpayWebhook(rawBody: Buffer, signature: string | undefined) {
+export function verifyRazorpayWebhook(
+  rawBody: Buffer,
+  signature: string | undefined,
+) {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
   if (!secret || !signature) return false;
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  return expected.length === signature.length && timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  return (
+    expected.length === signature.length &&
+    timingSafeEqual(Buffer.from(expected), Buffer.from(signature))
+  );
 }

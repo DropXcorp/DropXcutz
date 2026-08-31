@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:api": "npm --prefix backend run dev",
-    "dev:frontend": "npm --prefix frontend/apps/salon-erp run dev"
+    "dev:frontend": "npm --prefix frontend/apps/salon-erp run dev",
+    "dev:public": "npm --prefix frontend/apps/public-site run dev"
   }
 }
