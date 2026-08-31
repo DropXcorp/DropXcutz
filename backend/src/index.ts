@@ -10,6 +10,8 @@ import { platformRouter } from "./routes/platform.routes";
 import { publicRouter } from "./routes/public.routes";
 import { publicSlugRouter } from "./routes/public-slug.routes";
 import { expireSubscriptions } from "./services/subscription.service";
+import { sendDueTrialReminders } from "./services/trial-reminder.service";
+import { handleRazorpayWebhook } from "./controllers/billing.controller";
 
 const app = express();
 const port = Number(process.env.PORT_NO ?? 5000);
@@ -36,6 +38,8 @@ app.use(
   }),
 );
 
+app.post("/api/webhooks/razorpay", express.raw({ type: "application/json" }), handleRazorpayWebhook);
+
 
 app.use(express.json({ limit: "1mb" }));
 app.use(requireTrustedOrigin);
@@ -59,10 +63,13 @@ const server = app.listen(port, () =>
   console.info(`Salon API listening on http://localhost:${port}`),
 );
 void expireSubscriptions().catch((error) => console.error("Subscription expiry check failed", error));
+void sendDueTrialReminders().catch((error) => console.error("Trial reminder check failed", error));
 const subscriptionExpiryTimer = setInterval(() => void expireSubscriptions().catch((error) => console.error("Subscription expiry check failed", error)), 15 * 60_000);
+const trialReminderTimer = setInterval(() => void sendDueTrialReminders().catch((error) => console.error("Trial reminder check failed", error)), 60 * 60_000);
 
 async function shutdown() {
   clearInterval(subscriptionExpiryTimer);
+  clearInterval(trialReminderTimer);
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);

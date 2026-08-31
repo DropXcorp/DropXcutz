@@ -13,10 +13,20 @@ if (password.length < 8) throw new Error("PLATFORM_ADMIN_PASSWORD must be at lea
 
 const platformEmail = email!;
 const platformPassword = password!;
+const platformPermissions = ["SALON_MANAGEMENT", "BILLING", "REPORTING", "ROLE_MANAGEMENT", "SECURITY", "SUPPORT_TICKETS", "BULK_OPERATIONS"];
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
+  const fullAccessRole = await prisma.platformRole.upsert({
+    where: { code: "FULL_ACCESS" },
+    update: { name: "Full Access", description: "Unrestricted platform administration", isSystem: true },
+    create: { code: "FULL_ACCESS", name: "Full Access", description: "Unrestricted platform administration", isSystem: true },
+  });
+  await prisma.platformRolePermission.createMany({
+    data: platformPermissions.map((permission) => ({ roleId: fullAccessRole.id, permission })),
+    skipDuplicates: true,
+  });
   const featureDefinitions = [
     ["DASHBOARD", "Dashboard"], ["CUSTOMERS", "Customers"], ["EMPLOYEES", "Employees"], ["SERVICES", "Services"],
     ["APPOINTMENTS", "Appointments"], ["INVENTORY", "Inventory"], ["INVOICES", "Invoices"], ["PAYROLL", "Payroll"],
@@ -50,13 +60,14 @@ async function main() {
   }
   await prisma.user.upsert({
     where: { email: platformEmail },
-    update: { name: process.env.PLATFORM_ADMIN_NAME?.trim() || "Platform Administrator", role: "PLATFORM_ADMIN", salonId: null, active: true },
+    update: { name: process.env.PLATFORM_ADMIN_NAME?.trim() || "Platform Administrator", role: "PLATFORM_ADMIN", salonId: null, active: true, platformRoleId: fullAccessRole.id },
     create: {
       name: process.env.PLATFORM_ADMIN_NAME?.trim() || "Platform Administrator",
       email: platformEmail,
       passwordHash: await bcrypt.hash(platformPassword, 12),
       role: "PLATFORM_ADMIN",
       salonId: null,
+      platformRoleId: fullAccessRole.id,
     },
   });
   console.info(`Platform administrator is ready: ${email}`);

@@ -12,6 +12,7 @@ import {
   Edit2,
   Eye,
   FileClock,
+  FlaskConical,
   KeyRound,
   LayoutDashboard,
   Plus,
@@ -64,6 +65,7 @@ export type PlatformUser = {
   active: boolean;
   createdAt: string;
   salon: { id: string; salonName: string; code: string } | null;
+  platformRole?: { id: string; name: string } | null;
 };
 
 export type AuditItem = {
@@ -111,13 +113,14 @@ export type Section =
   | "Audit Log"
   | "Settings"
   | "Notifications"
-  | "Financials";
+  | "Financials"
+  | "Operations";
 
 export const inputClass =
-  "w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-4 focus:ring-zinc-500/10";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10";
 
 export const buttonClass =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-700 disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60";
 
 export const money = (v: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -216,11 +219,12 @@ export function SectionHeading({
   subtitle: string;
 }) {
   return (
-    <div>
-      <h2 className="text-2xl font-bold tracking-tight text-zinc-950 sm:text-[28px]">
+    <div className="animate-[fade-in_0.3s_ease-out]">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Platform workspace</p>
+      <h2 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-[28px]">
         {title}
       </h2>
-      <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+      <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
     </div>
   );
 }
@@ -309,11 +313,11 @@ export function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 px-5 py-4 sm:px-6">
+    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_35px_-24px_rgba(15,23,42,0.5)]">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
         <div>
-          <h3 className="font-bold text-zinc-950 text-base">{title}</h3>
-          <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>
+          <h3 className="text-base font-bold text-slate-950">{title}</h3>
+          <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
         </div>
         {action}
       </header>
@@ -396,10 +400,10 @@ export function Table({
   return (
     <div className="overflow-x-auto">
       <table className="admin-table min-w-full text-left text-sm">
-        <thead className="bg-zinc-50/75 text-[11px] font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100">
+        <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-400">
           <tr>
             {head.map((x) => (
-              <th key={x} className="px-5 py-3.5">
+              <th key={x} className="whitespace-nowrap px-5 py-3.5">
                 {x}
               </th>
             ))}
@@ -652,6 +656,7 @@ export function SalonsView({
   onEdit,
   onUpdateStatus,
   onDelete,
+  onRestore,
   onViewDetails,
 }: {
   salons: Salon[];
@@ -663,6 +668,7 @@ export function SalonsView({
   onEdit: (salon: Salon) => void;
   onUpdateStatus: (salonId: string, status: Status) => void;
   onDelete: (salon: Salon) => void;
+  onRestore: (salon: Salon) => void;
   onViewDetails: (salon: Salon) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -671,36 +677,78 @@ export function SalonsView({
     if (statusFilter !== "ALL" && s.status !== statusFilter) return false;
     return true;
   });
+  const activeSalons = salons.filter((salon) => salon.status === "ACTIVE").length;
+  const trialSalons = salons.filter((salon) => salon.status === "TRIAL").length;
+  const totalRevenue = salons.reduce((sum, salon) => sum + salon.paidRevenue, 0);
+  const totalAppointments = salons.reduce(
+    (sum, salon) => sum + (salon._count?.appointments ?? 0),
+    0,
+  );
+  const metrics = [
+    { label: "Total Salons", value: total, hint: "Across platform", Icon: Building2, tone: "bg-blue-50 text-blue-600" },
+    { label: "Active Salons", value: activeSalons, hint: `${total ? Math.round((activeSalons / total) * 100) : 0}% of total`, Icon: TrendingUp, tone: "bg-emerald-50 text-emerald-600" },
+    { label: "Trial Salons", value: trialSalons, hint: `${total ? Math.round((trialSalons / total) * 100) : 0}% of total`, Icon: FlaskConical, tone: "bg-amber-50 text-amber-600" },
+    { label: "Total Revenue", value: money(totalRevenue), hint: "Across all salons", Icon: CircleDollarSign, tone: "bg-indigo-50 text-indigo-600" },
+    { label: "Appointments", value: totalAppointments, hint: "Total scheduled", Icon: CalendarDays, tone: "bg-violet-50 text-violet-600" },
+  ];
 
   return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease: "easeOut" }}
+      className="space-y-5"
+    >
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {metrics.map(({ label, value, hint, Icon, tone }, index) => (
+          <motion.article
+            key={label}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.045, duration: 0.25 }}
+            whileHover={{ y: -3 }}
+            className="flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_10px_30px_-20px_rgba(15,23,42,0.45)] transition-shadow hover:shadow-[0_16px_35px_-20px_rgba(37,99,235,0.3)]"
+          >
+            <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${tone}`}>
+              <Icon className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-500">{label}</p>
+              <p className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{value}</p>
+              <p className="mt-1 text-xs font-medium text-slate-400">{hint}</p>
+            </div>
+          </motion.article>
+        ))}
+      </section>
+
     <Panel
       title="Salon Workspaces Directory"
       subtitle={`${total} salons configured across platform`}
       action={
-        <button onClick={onCreate} className={buttonClass}>
+        <button onClick={onCreate} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 active:scale-[0.98]">
           <Plus className="h-4 w-4" /> Add Salon
         </button>
       }
     >
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 p-4 sm:px-6 bg-zinc-50/50">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/60 p-4 sm:px-6">
         <label className="relative block max-w-sm flex-1 min-w-[240px]">
-          <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
+          <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, code, email, city or plan..."
-            className={`${inputClass} pl-10`}
+            className={`${inputClass} border-slate-200 py-3 pl-10 shadow-sm focus:border-blue-400 focus:ring-blue-500/10`}
           />
         </label>
-        <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 text-xs font-semibold">
+        <div className="flex gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
           {["ALL", "ACTIVE", "TRIAL", "SUSPENDED", "ARCHIVED"].map((tab) => (
             <button
               key={tab}
               onClick={() => setStatusFilter(tab)}
               className={`rounded-lg px-3 py-1.5 transition ${
                 statusFilter === tab
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-zinc-600 hover:text-zinc-900"
+                  ? "bg-white text-blue-700 shadow-sm ring-1 ring-blue-100"
+                  : "text-slate-500 hover:text-slate-900"
               }`}
             >
               {tab.charAt(0) + tab.slice(1).toLowerCase()}
@@ -711,12 +759,12 @@ export function SalonsView({
 
       <Table
         head={[
-          "Salon Workspace",
-          "Plan",
-          "Customers",
-          "Appointments",
-          "Paid Revenue",
-          "Status",
+          "Salon Workspace ↕",
+          "Plan ↕",
+          "Customers ↕",
+          "Appointments ↕",
+          "Paid Revenue ↕",
+          "Status ↕",
           "Actions",
         ]}
         loading={loading}
@@ -737,36 +785,36 @@ export function SalonsView({
         }
       >
         {filtered.map((s) => (
-          <tr key={s.id} className="hover:bg-zinc-50/50 transition">
-            <td data-label="Salon" className="px-5 py-4">
+          <tr key={s.id} className="group transition-colors duration-200 hover:bg-blue-50/35">
+            <td data-label="Salon" className="px-5 py-3.5">
               <div className="flex gap-3 items-center">
                 <Avatar name={s.salonName} />
                 <div>
-                  <b className="text-sm font-bold text-zinc-900">{s.salonName}</b>
-                  <p className="text-xs text-zinc-500">
+                  <b className="text-sm font-bold text-slate-900">{s.salonName}</b>
+                  <p className="mt-0.5 text-xs text-slate-500">
                     <span className="font-mono text-zinc-700">{s.code}</span> • {s.city || "Location pending"} • {s.email}
                   </p>
                 </div>
               </div>
             </td>
-            <td data-label="Plan" className="px-5 py-4">
-              <span className="inline-flex rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-800">
+            <td data-label="Plan" className="px-5 py-3.5">
+              <span className="inline-flex rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
                 {s.subscriptionPlan}
               </span>
             </td>
-            <td data-label="Customers" className="px-5 py-4 font-medium text-zinc-700">
+            <td data-label="Customers" className="px-5 py-3.5 font-medium text-slate-700">
               {s._count?.customers || 0}
             </td>
-            <td data-label="Appointments" className="px-5 py-4 font-medium text-zinc-700">
+            <td data-label="Appointments" className="px-5 py-3.5 font-medium text-slate-700">
               {s._count?.appointments || 0}
             </td>
-            <td data-label="Revenue" className="px-5 py-4 font-bold text-zinc-900">
+            <td data-label="Revenue" className="px-5 py-3.5 font-bold text-slate-900">
               {money(s.paidRevenue)}
             </td>
-            <td data-label="Status" className="px-5 py-4">
+            <td data-label="Status" className="px-5 py-3.5">
               <StatusBadge value={s.status} />
             </td>
-            <td data-label="Actions" className="px-5 py-4 text-right">
+            <td data-label="Actions" className="px-5 py-3.5 text-right">
               <div className="flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => onViewDetails(s)}
@@ -775,14 +823,22 @@ export function SalonsView({
                 >
                   <Eye className="h-4 w-4" />
                 </button>
-                <button
+                {s.status !== "ARCHIVED" && <button
                   onClick={() => onEdit(s)}
                   className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition"
                   title="Edit Salon Profile"
                 >
                   <Edit2 className="h-4 w-4" />
-                </button>
-                {s.status === "ACTIVE" ? (
+                </button>}
+                {s.status === "ARCHIVED" ? (
+                  <button
+                    onClick={() => onRestore(s)}
+                    className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 transition"
+                    title="Restore Salon as Suspended"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                ) : s.status === "ACTIVE" ? (
                   <button
                     onClick={() => onUpdateStatus(s.id, "SUSPENDED")}
                     className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 transition"
@@ -799,19 +855,20 @@ export function SalonsView({
                     <Check className="h-4 w-4" />
                   </button>
                 )}
-                <button
+                {s.status !== "ARCHIVED" && <button
                   onClick={() => onDelete(s)}
                   className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition"
                   title="Archive Salon"
                 >
                   <Trash2 className="h-4 w-4" />
-                </button>
+                </button>}
               </div>
             </td>
           </tr>
         ))}
       </Table>
     </Panel>
+    </motion.div>
   );
 }
 
@@ -939,12 +996,16 @@ export function UsersView({
   onToggle,
   onCreateUser,
   onResetPassword,
+  roles,
+  onAssignPlatformRole,
 }: {
   items: PlatformUser[];
   loading: boolean;
   onToggle: (u: PlatformUser) => void;
   onCreateUser: () => void;
   onResetPassword: (u: PlatformUser) => void;
+  roles: { id: string; name: string }[];
+  onAssignPlatformRole: (user: PlatformUser, platformRoleId: string | null) => void;
 }) {
   const [search, setSearch] = useState("");
 
@@ -1006,6 +1067,7 @@ export function UsersView({
               >
                 {u.role.replaceAll("_", " ")}
               </span>
+              {u.role === "PLATFORM_ADMIN" && <select value={u.platformRole?.id ?? ""} onChange={(event) => onAssignPlatformRole(u, event.target.value || null)} className="mt-2 block rounded border border-zinc-200 bg-white px-2 py-1 text-xs"><option value="">Legacy full access</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select>}
             </td>
             <td data-label="Workspace" className="px-5 py-4 text-sm text-zinc-700">
               {u.salon ? (
@@ -1633,13 +1695,15 @@ export function EditSalonModal({
 // C. Create User Modal
 export function CreateUserModal({
   salons,
+  roles,
   onClose,
   onSubmit,
   submitting,
 }: {
   salons: Salon[];
+  roles: { id: string; name: string }[];
   onClose: () => void;
-  onSubmit: (user: { name: string; email: string; password: string; role: string; salonId?: string }) => void;
+  onSubmit: (user: { name: string; email: string; password: string; role: string; salonId?: string; platformRoleId?: string }) => void;
   submitting: boolean;
 }) {
   const [role, setRole] = useState("PLATFORM_ADMIN");
@@ -1659,6 +1723,7 @@ export function CreateUserModal({
             password: String(f.get("password")),
             role: String(f.get("role")),
             salonId: String(f.get("salonId") || "") || undefined,
+            platformRoleId: String(f.get("platformRoleId") || "") || undefined,
           });
         }}
         className="flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
@@ -1699,6 +1764,7 @@ export function CreateUserModal({
               </select>
             </Field>
           )}
+          {role === "PLATFORM_ADMIN" && <Field label="Platform permission role"><select name="platformRoleId" className={inputClass}><option value="">Legacy full access</option>{roles.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>}
         </div>
         <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
           <button

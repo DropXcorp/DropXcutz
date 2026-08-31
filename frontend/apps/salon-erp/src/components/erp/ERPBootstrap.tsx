@@ -265,7 +265,7 @@ export default function ERPBootstrap({
     );
   return (
     <>
-      <Toaster position="top-right" richColors closeButton />
+      <Toaster position="top-right" richColors closeButton duration={3500} />
       {error && (
         <div className="flex items-center justify-between bg-red-600 px-4 py-2 text-sm text-white shadow-sm">
           <div className="flex items-center gap-3">

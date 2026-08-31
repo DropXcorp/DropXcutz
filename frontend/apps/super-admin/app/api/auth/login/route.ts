@@ -3,7 +3,10 @@ const backend = process.env.SALON_BACKEND_URL ?? "http://localhost:5000/api";
 export async function POST(request: Request) {
   const response = await fetch(`${backend}/erp/auth/login`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "x-dropxcutz-session-scope": "platform",
+    },
     body: JSON.stringify(await request.json()),
     cache: "no-store",
   });

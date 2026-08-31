@@ -13,10 +13,12 @@ async function forward(request: Request, resource: string, method: string) {
       ...(method !== "GET" ? { body: await request.text() } : {}),
     },
   );
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+  const headers = new Headers();
+  for (const name of ["content-type", "content-disposition"]) {
+    const value = response.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new NextResponse(await response.text(), { status: response.status, headers });
 }
 export async function GET(
   request: Request,

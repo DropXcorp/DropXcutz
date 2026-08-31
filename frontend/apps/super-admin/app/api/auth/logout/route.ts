@@ -5,7 +5,10 @@ const backend = process.env.SALON_BACKEND_URL ?? "http://localhost:5000/api";
 export async function POST(request: Request) {
   const response = await fetch(`${backend}/erp/auth/logout`, {
     method: "POST",
-    headers: { cookie: request.headers.get("cookie") ?? "" },
+    headers: {
+      cookie: request.headers.get("cookie") ?? "",
+      "x-dropxcutz-session-scope": "platform",
+    },
     cache: "no-store",
   });
   const result = new NextResponse(await response.text(), { status: response.status, headers: { "content-type": "application/json" } });

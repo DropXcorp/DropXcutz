@@ -166,7 +166,7 @@ export async function deleteSalon(request: Request, response: Response) {
   if (!current) throw new ApiError(404, "Salon not found.");
   await prisma.salon.update({
     where: { id },
-    data: { status: "ARCHIVED" },
+    data: { status: "ARCHIVED", archivedAt: new Date() },
   });
   await audit(
     response.locals.user?.id,
@@ -176,6 +176,24 @@ export async function deleteSalon(request: Request, response: Response) {
     { salonName: current.salonName },
   );
   response.status(204).end();
+}
+
+export async function restoreSalon(request: Request, response: Response) {
+  const id = String(request.params.id);
+  const current = await prisma.salon.findUnique({ where: { id } });
+  if (!current) throw new ApiError(404, "Salon not found.");
+  if (current.status !== "ARCHIVED") {
+    throw new ApiError(409, "Only archived salons can be restored.");
+  }
+
+  const item = await prisma.salon.update({
+    where: { id },
+    data: { status: "SUSPENDED", archivedAt: null },
+  });
+  await audit(response.locals.user?.id, "SALON_RESTORED", "SALON", id, {
+    salonName: item.salonName,
+  });
+  ok(response, { ...item, taxRate: Number(item.taxRate) });
 }
 
 export async function platformOverview(_request: Request, response: Response) {
@@ -251,7 +269,7 @@ const audit = (
 
 export async function listPlatformUsers(_request: Request, response: Response) {
   const users = await prisma.user.findMany({
-    include: { salon: { select: { id: true, salonName: true, code: true } } },
+    include: { salon: { select: { id: true, salonName: true, code: true } }, platformRole: { select: { id: true, name: true } } },
     orderBy: { createdAt: "desc" },
   });
   ok(
@@ -261,11 +279,14 @@ export async function listPlatformUsers(_request: Request, response: Response) {
 }
 
 export async function createPlatformUser(request: Request, response: Response) {
-  const { name, email, password, role, salonId = null } = platformUserCreateInput.parse(request.body);
+  const { name, email, password, role, salonId = null, platformRoleId = null } = platformUserCreateInput.parse(request.body);
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     throw new ApiError(400, "A user with this email already exists.");
+  }
+  if (platformRoleId && !await prisma.platformRole.findUnique({ where: { id: platformRoleId } })) {
+    throw new ApiError(404, "Platform role not found.");
   }
 
   const user = await prisma.user.create({
@@ -275,10 +296,11 @@ export async function createPlatformUser(request: Request, response: Response) {
       passwordHash: await bcrypt.hash(password, 12),
       role: role as any,
       salonId,
+      platformRoleId: role === "PLATFORM_ADMIN" ? platformRoleId : null,
       active: true,
       mustChangePassword: false,
     },
-    include: { salon: { select: { id: true, salonName: true, code: true } } },
+    include: { salon: { select: { id: true, salonName: true, code: true } }, platformRole: { select: { id: true, name: true } } },
   });
 
   await audit(
@@ -295,17 +317,22 @@ export async function createPlatformUser(request: Request, response: Response) {
 
 export async function updatePlatformUser(request: Request, response: Response) {
   const id = String(request.params.id);
-  const { active, newPassword, role, name, salonId } = platformUserPatchInput.parse(request.body);
+  const { active, newPassword, role, name, salonId, platformRoleId } = platformUserPatchInput.parse(request.body);
   const current = await prisma.user.findUniqueOrThrow({ where: { id }, select: { role: true, salonId: true } });
   const nextRole = role ?? current.role;
   const nextSalonId = salonId === undefined ? current.salonId : salonId;
   if (nextRole !== "PLATFORM_ADMIN" && !nextSalonId)
     throw new ApiError(400, "Salon users must be assigned to a salon.");
+  if (platformRoleId && !await prisma.platformRole.findUnique({ where: { id: platformRoleId } })) {
+    throw new ApiError(404, "Platform role not found.");
+  }
 
   const data: Record<string, any> = {};
   if (typeof active === "boolean") data.active = active;
   if (typeof role === "string") data.role = role;
   if (salonId !== undefined) data.salonId = salonId;
+  if (platformRoleId !== undefined) data.platformRoleId = nextRole === "PLATFORM_ADMIN" ? platformRoleId : null;
+  if (role && role !== "PLATFORM_ADMIN") data.platformRoleId = null;
   if (typeof name === "string" && name.trim()) data.name = name.trim();
   if (typeof newPassword === "string" && newPassword.length >= 8) {
     data.passwordHash = await bcrypt.hash(newPassword, 12);
@@ -314,7 +341,7 @@ export async function updatePlatformUser(request: Request, response: Response) {
   const user = await prisma.user.update({
     where: { id },
     data,
-    include: { salon: { select: { id: true, salonName: true, code: true } } },
+    include: { salon: { select: { id: true, salonName: true, code: true } }, platformRole: { select: { id: true, name: true } } },
   });
 
   await audit(

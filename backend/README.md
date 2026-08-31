@@ -32,4 +32,19 @@ FRONTEND_ORIGINS=http://localhost:3000,http://localhost:3001
 
 Optional settings are `PORT_NO` (defaults to `5000`) and `FRONTEND_ORIGINS`. Copy `.env.example` to `.env` and fill in the values. Redis, uploads, payment processing, and WebSockets are not configured in this project.
 
+## Platform operations
+
+Platform operations include a Razorpay-ready billing data model, platform invoices,
+support tickets, custom platform roles, login/device history, two-factor state,
+bulk-operation records, archived-salon restoration, and scheduled trial reminders.
+Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` before
+enabling a Razorpay adapter. Trial reminders are written only to the salon ERP's
+in-app notification store; email, SMS, and WhatsApp delivery are deliberately not
+configured.
+
+Configure Razorpay to post to `POST /api/webhooks/razorpay`. The endpoint verifies
+the raw request body with `RAZORPAY_WEBHOOK_SECRET` and processes
+`payment_link.paid` idempotently. Platform invoice creation is available to users
+with the `BILLING` permission at `POST /api/platform/billing/invoices`.
+
 Use `bun run typecheck` to validate the backend and `bunx prisma migrate dev --name <change>` when changing the schema.
