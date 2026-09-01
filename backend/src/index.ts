@@ -32,15 +32,20 @@ const origins = (
   .split(",")
   .map((origin) => origin.trim());
 
+const erpCors = cors({
+  origin: origins,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+});
+
+const publicCors = cors({
+  origin: true,
+  credentials: false,
+  methods: ["GET", "POST", "OPTIONS"],
+});
+
 app.disable("x-powered-by");
 app.use(securityHeaders);
-app.use(
-  cors({
-    origin: origins,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  }),
-);
 
 app.post(
   "/api/webhooks/razorpay",
@@ -49,8 +54,18 @@ app.post(
 );
 
 app.use(express.json({ limit: "6mb" }));
-app.use("/uploads", express.static(path.resolve(process.env.UPLOAD_DIR ?? "uploads"), { maxAge: "7d", immutable: true }));
-app.use(requireTrustedOrigin);
+app.use(
+  "/uploads",
+  publicCors,
+  express.static(path.resolve(process.env.UPLOAD_DIR ?? "uploads"), {
+    maxAge: "7d",
+    immutable: true,
+  }),
+);
+
+app.use("/api/erp", erpCors, requireTrustedOrigin);
+app.use("/api/platform", erpCors, requireTrustedOrigin);
+
 app.use(
   "/api/erp/auth/login",
   rateLimit({
@@ -78,16 +93,17 @@ app.use(
     legacyHeaders: false,
   }),
 );
-app.get("/api/health", async (_request, response) => {
+app.get("/api/health", publicCors, async (_request, response) => {
   await prisma.$queryRaw`SELECT 1`;
   response.json({ status: "ok", service: "dropxcutz-salon-api" });
 });
 
 app.use("/api/erp", salonRouter);
 app.use("/api/platform", platformRouter);
-app.use("/api/v1/public", publicRouter);
+app.use("/api/v1/public", publicCors, publicRouter);
 app.use(
   "/api/public/v1/salons",
+  publicCors,
   rateLimit({
     windowMs: 15 * 60_000,
     limit: limits.publicSlug,
