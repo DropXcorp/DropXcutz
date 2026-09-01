@@ -20,7 +20,11 @@ body {
 
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
+button[data-request-busy] { position: relative; color: transparent !important; }
+button[data-request-busy] > * { visibility: hidden; }
+button[data-request-busy]::after { content: "Saving..."; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; }
 ::selection { background: #c7d2fe; color: #312e81; }
+@keyframes request-progress { from { transform: translateX(-100%); } to { transform: translateX(320%); } }
 .metric-icon { display:grid; width:2.5rem; height:2.5rem; place-items:center; border-radius:.75rem; background:#eef2ff; color:#4f46e5; }
 
 @media (max-width:639px) {

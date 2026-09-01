@@ -436,6 +436,8 @@ const emptySettings: SalonSettings = {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
 
 export async function erpApi<T>(path: string, init?: RequestInit): Promise<T> {
+  window.dispatchEvent(new CustomEvent("dropxcutz:request-start"));
+  try {
   const response = await fetch(`${API_URL}/erp${path}`, {
     ...init,
     credentials: "include",
@@ -464,6 +466,9 @@ export async function erpApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (response.status === 204) return undefined as T;
   const json = await response.json();
   return (json.data ?? json) as T;
+  } finally {
+    window.dispatchEvent(new CustomEvent("dropxcutz:request-end"));
+  }
 }
 
 const api = erpApi;
