@@ -1,6 +1,6 @@
 # DropXcutz
 
-## Run frontend and backend together
+## Run locally (no Docker required)
 
 From the repository root:
 
@@ -8,4 +8,10 @@ From the repository root:
 npm run dev
 ```
 
-This starts the API at `http://localhost:5000` and the Salon ERP frontend at `http://localhost:3000`. Press `Ctrl+C` once to stop both processes.
+This starts all local applications:
+
+- API: `http://localhost:5000`
+- Salon ERP: `http://localhost:3000`
+- Customer booking website: `http://localhost:3002`
+
+Before the first run, copy `frontend/apps/public-site/.env.example` to `.env.local`. The included local configuration uses the `dropx-studio` template salon. Press `Ctrl+C` once to stop all processes.

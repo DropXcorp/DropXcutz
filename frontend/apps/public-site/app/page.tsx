@@ -63,6 +63,7 @@ export default function PublicSite() {
   const [slots, setSlots] = useState<string[]>([]);
   const [time, setTime] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const selectedService = useMemo(
     () => services.find((item) => item.id === serviceId),
@@ -74,7 +75,8 @@ export default function PublicSite() {
         setSalon(profile);
         setServices(catalog);
       })
-      .catch((error: Error) => setMessage(error.message));
+      .catch((error: Error) => setMessage(error.message))
+      .finally(() => setLoading(false));
   }, []);
   useEffect(() => {
     if (!serviceId) {
@@ -104,7 +106,8 @@ export default function PublicSite() {
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!serviceId || !employeeId || !time) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setBooking(true);
     setMessage("");
     try {
@@ -130,7 +133,7 @@ export default function PublicSite() {
       setMessage(
         `Booked successfully. Your appointment number is ${confirmation.appointmentNumber}.`,
       );
-      event.currentTarget.reset();
+      formElement.reset();
       setTime("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Booking failed.");
@@ -143,7 +146,7 @@ export default function PublicSite() {
       <section className="hero">
         <div>
           <span className="eyebrow">Online appointment booking</span>
-          <h1>{salon?.name ?? "Your salon"}</h1>
+          <h1>{salon?.name ?? (loading ? "Your salon" : "Salon unavailable")}</h1>
           <p>
             {salon
               ? `Choose your service, specialist, and a convenient time. ${salon.address ?? salon.city ?? ""}`

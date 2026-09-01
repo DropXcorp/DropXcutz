@@ -26,7 +26,6 @@ import {
   ShoppingCart,
   Crown,
   Globe,
-  KeyRound,
 } from "lucide-react";
 
 import AppLogo from "@/src/components/layout/AppLogo";
@@ -181,6 +180,11 @@ const menu = [
         icon: BarChart3,
       },
       {
+        name: "Uploads",
+        href: "/uploads",
+        icon: Boxes,
+      },
+      {
         name: "Branches",
         href: "/branches",
         icon: Building2,
@@ -212,12 +216,6 @@ const menu = [
         href: "/settings/website",
         icon: Globe,
         feature: "WEBSITE_MANAGEMENT",
-      },
-      {
-        name: "Integrations",
-        href: "/settings/integration",
-        icon: KeyRound,
-        feature: "API_INTEGRATIONS",
       },
       {
         name: "Profile",

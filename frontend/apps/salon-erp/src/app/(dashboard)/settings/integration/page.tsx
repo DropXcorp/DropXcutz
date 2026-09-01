@@ -1,5 +1,6 @@
-import IntegrationSettingsPanel from "@/src/components/settings/IntegrationSettingsPanel";
+import { notFound } from "next/navigation";
 
 export default function WebsiteIntegrationPage() {
-  return <IntegrationSettingsPanel />;
+  // API-key management belongs to the platform administrator, not salon staff.
+  notFound();
 }

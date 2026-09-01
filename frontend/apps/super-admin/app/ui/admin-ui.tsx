@@ -1996,7 +1996,7 @@ export function SalonDetailsModal({
           </div>
         </div>
         <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
-          <button onClick={onManage} className="rounded-xl border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-100">Manage entitlement</button>
+          <button onClick={onManage} className="rounded-xl border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-100">Open salon workspace</button>
           <button
             onClick={onClose}
             className="rounded-xl bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
