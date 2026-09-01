@@ -33,7 +33,7 @@ export function OperationsConsole({ salons, request, onRefresh }: { salons: Salo
   useEffect(() => { void load(); }, [tab]);
   const submit = async (action: () => Promise<void>, success: string) => { setBusy(true); setError(""); try { await action(); setMessage(success); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Operation failed."); } finally { setBusy(false); } };
   return <div className="space-y-5">
-    <div className="flex flex-wrap gap-2">{(["Billing", "Tickets", "Roles", "Security", "Bulk"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`rounded-xl px-4 py-2 text-sm font-semibold ${tab === item ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-700"}`}>{item}</button>)}</div>
+    <div className="flex flex-wrap gap-2">{(["Billing", "Tickets", "Roles", "Security", "Bulk"] as const).map((item) => <button key={item} data-request-feedback-ignore onClick={() => setTab(item)} className={`rounded-xl px-4 py-2 text-sm font-semibold ${tab === item ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-700"}`}>{item}</button>)}</div>
     {message && <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}{error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
     {tab === "Billing" && <Billing salons={salons} invoices={invoices} busy={busy} submit={submit} request={request} />}
     {tab === "Tickets" && <Tickets salons={salons} tickets={tickets} busy={busy} submit={submit} request={request} />}

@@ -13,6 +13,7 @@ type Salon = {
   city?: string | null;
   openingTime: string;
   closingTime: string;
+  onlinePaymentsConfigured?: boolean;
 };
 type Service = {
   id: string;
@@ -22,6 +23,21 @@ type Service = {
   durationMinutes: number;
 };
 type Employee = { id: string; name: string; role: string };
+type CheckoutOrder = {
+  orderId: string;
+  keyId: string;
+  amount: number;
+  currency: string;
+  appointmentNumber: string;
+  customer: { name: string; email?: string | null; contact?: string | null };
+};
+type RazorpayResponse = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string };
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
 const mode = process.env.NEXT_PUBLIC_SITE_MODE ?? "template";
 const slug = process.env.NEXT_PUBLIC_SALON_SLUG ?? "dropx-studio";
@@ -37,26 +53,52 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     mode === "custom"
       ? `${apiUrl}/v1/public`
       : `${apiUrl}/public/v1/salons/${slug}`;
-  window.dispatchEvent(new CustomEvent("dropxcutz:request-start"));
+  const requestId = Math.random().toString(36).slice(2);
+  window.dispatchEvent(
+    new CustomEvent("dropxcutz:request-start", {
+      detail: {
+        requestId,
+        button:
+          document.activeElement instanceof HTMLButtonElement
+            ? document.activeElement
+            : null,
+      },
+    }),
+  );
   try {
-  const response = await fetch(`${base}${path}`, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(mode === "custom" ? { "X-DropXcutz-Key": customKey } : {}),
-      ...init?.headers,
-    },
-  });
-  const body = (await response.json().catch(() => null)) as {
-    data?: T;
-    error?: string;
-  } | null;
-  if (!response.ok)
-    throw new Error(body?.error ?? "We could not complete that request.");
-  return body?.data as T;
+    const response = await fetch(`${base}${path}`, {
+      ...init,
+      headers: {
+        "content-type": "application/json",
+        ...(mode === "custom" ? { "X-DropXcutz-Key": customKey } : {}),
+        ...init?.headers,
+      },
+    });
+    const body = (await response.json().catch(() => null)) as {
+      data?: T;
+      error?: string;
+    } | null;
+    if (!response.ok)
+      throw new Error(body?.error ?? "We could not complete that request.");
+    return body?.data as T;
   } finally {
-    window.dispatchEvent(new CustomEvent("dropxcutz:request-end"));
+    window.dispatchEvent(
+      new CustomEvent("dropxcutz:request-end", { detail: { requestId } }),
+    );
   }
+}
+
+async function loadRazorpayCheckout() {
+  if (window.Razorpay) return;
+  await new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load the secure payment form."));
+    document.head.appendChild(script);
+  });
+  if (!window.Razorpay) throw new Error("Could not initialise the secure payment form.");
 }
 
 export default function PublicSite() {
@@ -117,7 +159,7 @@ export default function PublicSite() {
     setBooking(true);
     setMessage("");
     try {
-      const confirmation = await request<{ appointmentNumber: string }>(
+      const confirmation = await request<{ id: string; appointmentNumber: string }>(
         "/appointments",
         {
           method: "POST",
@@ -136,9 +178,49 @@ export default function PublicSite() {
           }),
         },
       );
-      setMessage(
-        `Booked successfully. Your appointment number is ${confirmation.appointmentNumber}.`,
+      if (!salon?.onlinePaymentsConfigured) {
+        setMessage(`Booked successfully. Your appointment number is ${confirmation.appointmentNumber}. Pay at the salon.`);
+        formElement.reset();
+        setTime("");
+        return;
+      }
+      const order = await request<CheckoutOrder>(
+        `/appointments/${confirmation.id}/payment-order`,
+        { method: "POST" },
       );
+      await loadRazorpayCheckout();
+      await new Promise<void>((resolve, reject) => {
+        const checkout = new window.Razorpay!({
+          key: order.keyId,
+          order_id: order.orderId,
+          amount: order.amount,
+          currency: order.currency,
+          name: salon.name,
+          description: `Appointment ${order.appointmentNumber}`,
+          prefill: order.customer,
+          theme: { color: "#18181b" },
+          modal: {
+            ondismiss: () => reject(new Error("Payment was cancelled. Your appointment is pending payment.")),
+          },
+          handler: async (result: RazorpayResponse) => {
+            try {
+              await request(`/appointments/${confirmation.id}/payment-verify`, {
+                method: "POST",
+                body: JSON.stringify({
+                  orderId: result.razorpay_order_id,
+                  paymentId: result.razorpay_payment_id,
+                  signature: result.razorpay_signature,
+                }),
+              });
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          },
+        });
+        checkout.open();
+      });
+      setMessage(`Payment successful. Your appointment number is ${confirmation.appointmentNumber}.`);
       formElement.reset();
       setTime("");
     } catch (error) {
@@ -153,7 +235,9 @@ export default function PublicSite() {
       <section className="hero">
         <div>
           <span className="eyebrow">Online appointment booking</span>
-          <h1>{salon?.name ?? (loading ? "Your salon" : "Salon unavailable")}</h1>
+          <h1>
+            {salon?.name ?? (loading ? "Your salon" : "Salon unavailable")}
+          </h1>
           <p>
             {salon
               ? `Choose your service, specialist, and a convenient time. ${salon.address ?? salon.city ?? ""}`
@@ -295,8 +379,12 @@ export default function PublicSite() {
             type="submit"
           >
             {booking
-              ? "Booking…"
-              : `Book ${selectedService?.name ?? "appointment"}`}
+              ? salon?.onlinePaymentsConfigured
+                ? "Opening secure payment…"
+                : "Booking…"
+              : salon?.onlinePaymentsConfigured
+                ? `Pay & book ${selectedService?.name ?? "appointment"}`
+                : `Book ${selectedService?.name ?? "appointment"}`}
           </button>
         </form>
       </section>

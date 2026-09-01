@@ -436,7 +436,10 @@ const emptySettings: SalonSettings = {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
 
 export async function erpApi<T>(path: string, init?: RequestInit): Promise<T> {
-  window.dispatchEvent(new CustomEvent("dropxcutz:request-start"));
+  const requestId = Math.random().toString(36).slice(2);
+  window.dispatchEvent(new CustomEvent("dropxcutz:request-start", {
+    detail: { requestId, button: document.activeElement instanceof HTMLButtonElement ? document.activeElement : null },
+  }));
   try {
   const response = await fetch(`${API_URL}/erp${path}`, {
     ...init,
@@ -467,7 +470,7 @@ export async function erpApi<T>(path: string, init?: RequestInit): Promise<T> {
   const json = await response.json();
   return (json.data ?? json) as T;
   } finally {
-    window.dispatchEvent(new CustomEvent("dropxcutz:request-end"));
+    window.dispatchEvent(new CustomEvent("dropxcutz:request-end", { detail: { requestId } }));
   }
 }
 
