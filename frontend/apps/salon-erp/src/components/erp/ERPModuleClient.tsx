@@ -3243,7 +3243,10 @@ function PurchaseOrdersView() {
 // 20. PROFILE VIEW
 // -------------------------------------------------------------
 function ProfileView() {
-  const { currentUser, currentSalon } = useERPStore();
+  const { currentUser, currentSalon, subscription, features, website } = useERPStore();
+  const featureLabels = features.map((code) =>
+    code.toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" "),
+  );
 
   return (
     <div className="space-y-6">
@@ -3270,6 +3273,44 @@ function ProfileView() {
               <span className="text-zinc-500">Salon Code:</span>
               <b className="font-mono text-zinc-950">{currentSalon?.code || "salon"}</b>
             </div>
+          </div>
+        </div>
+      </SectionPanel>
+      <SectionPanel title="Plan & access" subtitle="Your current subscription and enabled capabilities">
+        <div className="space-y-4 p-6 text-sm text-zinc-700">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-zinc-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Plan</p>
+              <p className="mt-1 text-lg font-bold text-zinc-950">{subscription?.plan || "Not assigned"}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Status</p>
+              <p className="mt-1 text-lg font-bold text-zinc-950">{subscription?.status || "Unavailable"}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Website</p>
+              <p className="mt-1 text-lg font-bold text-zinc-950">{website?.type || "Not configured"}</p>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 font-semibold text-zinc-950">Included features</p>
+            {featureLabels.length ? (
+              <div className="flex flex-wrap gap-2">
+                {featureLabels.map((label) => <span key={label} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{label}</span>)}
+              </div>
+            ) : <p className="text-zinc-500">No premium features are enabled. Contact the platform administrator to upgrade your plan.</p>}
+          </div>
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-amber-950">Need more features?</p>
+              <p className="mt-1 text-xs text-amber-800">Send an upgrade request to the platform team. Your plan will only change after approval.</p>
+            </div>
+            <a
+              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-zinc-950 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
+              href={`mailto:support@dropxcutz.com?subject=${encodeURIComponent(`Upgrade request - ${currentSalon?.name || "Salon"}`)}`}
+            >
+              Request upgrade
+            </a>
           </div>
         </div>
       </SectionPanel>

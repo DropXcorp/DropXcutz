@@ -51,14 +51,6 @@ const cookie = (name: string, token: string, maxAge: number) => {
 export async function login(request: Request, response: Response) {
   const scope = sessionScope(request);
   const { email, password } = loginInput.parse(request.body);
-  const twoFactorCode = z
-    .object({
-      twoFactorCode: z
-        .string()
-        .regex(/^\d{6}$/)
-        .optional(),
-    })
-    .parse(request.body).twoFactorCode;
   const user = await prisma.user.findUnique({
     where: { email },
     include: { salon: true },
@@ -82,23 +74,6 @@ export async function login(request: Request, response: Response) {
         },
       });
     throw new ApiError(401, "Invalid email or password.");
-  }
-  if (
-    scope === "platform" &&
-    user.twoFactorEnabled &&
-    (!user.twoFactorSecret ||
-      !twoFactorCode ||
-      !verifyTotp(user.twoFactorSecret, twoFactorCode))
-  ) {
-    await prisma.loginHistory.create({
-      data: {
-        userId: user.id,
-        ipAddress: request.ip,
-        userAgent: request.header("user-agent") ?? null,
-        succeeded: false,
-      },
-    });
-    throw new ApiError(401, "A valid authenticator code is required.");
   }
   const platformSettings = await prisma.platformSettings.findUnique({
     where: { id: "platform" },

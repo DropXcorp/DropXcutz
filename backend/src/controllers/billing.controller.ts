@@ -134,14 +134,36 @@ export async function handleRazorpayWebhook(
   }
   const link = event.payload?.payment_link?.entity;
   if (link?.id && event.event === "payment_link.paid") {
-    await prisma.platformInvoice.updateMany({
-      where: { razorpayPaymentLinkId: link.id },
-      data: {
-        status: "PAID",
-        amountPaid: (link.amount_paid ?? 0) / 100,
-        paidAt: new Date(),
-        razorpayPaymentId: link.payment_id ?? null,
-      },
+    await prisma.$transaction(async (tx) => {
+      const invoice = await tx.platformInvoice.findFirst({
+        where: { razorpayPaymentLinkId: link.id },
+        include: { subscription: true },
+      });
+      if (!invoice) return;
+      await tx.platformInvoice.update({
+        where: { id: invoice.id },
+        data: {
+          status: "PAID",
+          amountPaid: (link.amount_paid ?? 0) / 100,
+          paidAt: new Date(),
+          razorpayPaymentId: link.payment_id ?? null,
+        },
+      });
+      // A verified payment activates the linked subscription atomically.
+      if (invoice.subscriptionId) {
+        const subscription = invoice.subscription;
+        const expiresAt = subscription?.billingCycle === "ANNUAL"
+          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        await tx.subscription.update({
+          where: { id: invoice.subscriptionId },
+          data: { status: "ACTIVE", startsAt: new Date(), expiresAt },
+        });
+        await tx.salon.update({
+          where: { id: invoice.salonId },
+          data: { status: "ACTIVE" },
+        });
+      }
     });
   }
   await prisma.razorpayWebhookEvent.update({

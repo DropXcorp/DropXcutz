@@ -1,0 +1,37 @@
+services:
+  api:
+    build: ./backend
+    env_file: ./backend/.env
+    ports: ["5000:5000"]
+    volumes: ["dropxcutz_uploads:/app/uploads"]
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:5000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  salon-erp:
+    build: ./frontend/apps/salon-erp
+    environment:
+      NEXT_PUBLIC_API_URL: ${ERP_API_URL:-http://localhost:5000/api}
+      NEXT_PUBLIC_SALON_CODE: ${SALON_CODE:-dropx-studio}
+    ports: ["3000:3000"]
+    depends_on: { api: { condition: service_healthy } }
+  super-admin:
+    build: ./frontend/apps/super-admin
+    environment:
+      SALON_BACKEND_URL: ${SALON_BACKEND_URL:-http://api:5000/api}
+      SUPER_ADMIN_API_KEY: ${SUPER_ADMIN_API_KEY}
+      NEXT_PUBLIC_ERP_URL: ${NEXT_PUBLIC_ERP_URL:-http://localhost:3000}
+    ports: ["3001:3001"]
+    depends_on: { api: { condition: service_healthy } }
+  public-site:
+    build: ./frontend/apps/public-site
+    environment:
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:5000/api}
+      NEXT_PUBLIC_SITE_MODE: ${PUBLIC_SITE_MODE:-template}
+      NEXT_PUBLIC_SALON_SLUG: ${PUBLIC_SALON_SLUG:-dropx-studio}
+      NEXT_PUBLIC_PUBLIC_KEY: ${NEXT_PUBLIC_PUBLIC_KEY:-}
+    ports: ["3002:3002"]
+    depends_on: { api: { condition: service_healthy } }
+volumes:
+  dropxcutz_uploads:

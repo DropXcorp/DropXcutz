@@ -44,6 +44,8 @@ import {
   logout,
   me,
 } from "../controllers/auth.controller";
+import { uploadFile } from "../controllers/upload.controller";
+import { notificationStream } from "../controllers/notification-stream.controller";
 
 export const salonRouter = Router();
 salonRouter.post("/auth/login", login);
@@ -119,7 +121,9 @@ salonRouter.patch("/payroll/:id", requireFeature("PAYROLL"), updatePayroll);
 salonRouter.delete("/payroll/:id", requireFeature("PAYROLL"), deletePayroll);
 salonRouter.put("/settings", requireSalonAdmin, updateSettings);
 salonRouter.get("/notifications", listNotifications);
+salonRouter.get("/notifications/stream", notificationStream);
 salonRouter.patch("/notifications/:id/read", markNotificationRead);
+salonRouter.post("/uploads", requireSalonAdmin, uploadFile);
 salonRouter.post(
   "/loyalty/:customerId/adjust",
   requireFeature("LOYALTY"),
