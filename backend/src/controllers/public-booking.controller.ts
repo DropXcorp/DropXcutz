@@ -17,7 +17,10 @@ function minutes(value: string) {
 
 function assertDate(value: string) {
   const parsed = new Date(`${value}T00:00:00.000Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || parsed.toISOString().slice(0, 10) !== value)
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    parsed.toISOString().slice(0, 10) !== value
+  )
     throw new ApiError(400, "A valid date is required.");
 }
 
@@ -52,14 +55,30 @@ function atSalonTime(date: string, time: string, timezone: string) {
     throw new ApiError(500, "The salon timezone is invalid.");
   }
   const parts = Object.fromEntries(
-    formatter.formatToParts(new Date(wallClock)).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
+    formatter
+      .formatToParts(new Date(wallClock))
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
   );
-  const displayedAsUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute));
+  const displayedAsUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+  );
   return new Date(wallClock - (displayedAsUtc - wallClock));
 }
 
-function durationEnd(date: string, time: string, duration: number, timezone: string) {
-  return new Date(atSalonTime(date, time, timezone).getTime() + duration * 60_000);
+function durationEnd(
+  date: string,
+  time: string,
+  duration: number,
+  timezone: string,
+) {
+  return new Date(
+    atSalonTime(date, time, timezone).getTime() + duration * 60_000,
+  );
 }
 
 async function salonForPublic(response: Response) {
@@ -68,7 +87,10 @@ async function salonForPublic(response: Response) {
   if (!salon.allowOnlineBooking)
     throw new ApiError(403, "Online booking is currently unavailable.");
   if (!(await hasFeature(salon.id, "ONLINE_BOOKING")))
-    throw new ApiError(403, "Online booking is not included in this subscription.");
+    throw new ApiError(
+      403,
+      "Online booking is not included in this subscription.",
+    );
   return salon;
 }
 
@@ -249,9 +271,14 @@ export async function createPublicBooking(
       });
       const end = durationEnd(
         input.date,
-        input.time, service.durationMinutes, salon.timezone,
+        input.time,
+        service.durationMinutes,
+        salon.timezone,
       ).getTime();
-      if (end > atSalonTime(input.date, salon.closingTime, salon.timezone).getTime())
+      if (
+        end >
+        atSalonTime(input.date, salon.closingTime, salon.timezone).getTime()
+      )
         throw new ApiError(
           400,
           "The selected service does not fit within salon working hours.",
@@ -288,7 +315,7 @@ export async function createPublicBooking(
         data: { nextAppointmentNumber: { increment: 1 } },
         select: { nextAppointmentNumber: true },
       });
-      return client.appointment.create({
+      const createdAppointment = await client.appointment.create({
         data: {
           salonId: salon.id,
           appointmentNumber: `APT-${counter.nextAppointmentNumber - 1}`,
@@ -316,18 +343,27 @@ export async function createPublicBooking(
         },
         include: { customer: true, employee: true, lines: true },
       });
+
+      await client.notification.create({
+        data: {
+          salonId: salon.id,
+          type: "APPOINTMENT",
+          title: "New Online Booking",
+          message: `${customer.name} booked ${service.name} for ${input.date} at ${input.time} (${createdAppointment.appointmentNumber}).`,
+        },
+      });
+
+      return createdAppointment;
     },
     { isolationLevel: "Serializable" },
   );
-  response
-    .status(201)
-    .json({
-      data: {
-        id: booking.id,
-        appointmentNumber: booking.appointmentNumber,
-        status: booking.status,
-        scheduledAt: booking.scheduledAt,
-        customer: booking.customer.name,
-      },
-    });
+  response.status(201).json({
+    data: {
+      id: booking.id,
+      appointmentNumber: booking.appointmentNumber,
+      status: booking.status,
+      scheduledAt: booking.scheduledAt,
+      customer: booking.customer.name,
+    },
+  });
 }

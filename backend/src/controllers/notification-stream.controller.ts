@@ -3,21 +3,24 @@ import { prisma } from "../config/prisma";
 import { salonId } from "./http.controller";
 export async function notificationStream(request: Request, response: Response) {
   const tenant = salonId(response);
-  let last = String(request.query.since ?? "");
-  response
-    .status(200)
-    .set({
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
+  const rawSince =
+    typeof request.query.since === "string" ? request.query.since.trim() : "";
+  let lastDate: Date | null =
+    rawSince && !isNaN(new Date(rawSince).getTime())
+      ? new Date(rawSince)
+      : null;
+  response.status(200).set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
   response.flushHeaders();
   const send = async () => {
     const notifications = await prisma.notification.findMany({
       where: {
         salonId: tenant,
-        ...(last ? { createdAt: { gt: new Date(last) } } : {}),
+        ...(lastDate ? { createdAt: { gt: lastDate } } : {}),
       },
       orderBy: { createdAt: "asc" },
       take: 100,
@@ -26,7 +29,7 @@ export async function notificationStream(request: Request, response: Response) {
       response.write(
         `event: notification\ndata: ${JSON.stringify(notification)}\n\n`,
       );
-      last = notification.createdAt.toISOString();
+      lastDate = notification.createdAt;
     }
     response.write(": keepalive\n\n");
   };
