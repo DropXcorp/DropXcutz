@@ -41,6 +41,7 @@ import {
 } from "./admin-ui";
 import { OperationsConsole } from "./operations-console";
 import { ReportsConsole } from "./reports-console";
+import RequestFeedback from "./RequestFeedback";
 import type {
   AuditItem,
   OverviewData,
@@ -132,6 +133,8 @@ const copy: Record<Section, string> = {
 };
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  window.dispatchEvent(new CustomEvent("dropxcutz:request-start"));
+  try {
   const r = await fetch(url, {
     ...init,
     headers: { "content-type": "application/json", ...init?.headers },
@@ -156,6 +159,9 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
     );
   }
   return (b.data ?? b) as T;
+  } finally {
+    window.dispatchEvent(new CustomEvent("dropxcutz:request-end"));
+  }
 }
 
 export default function AdminApp() {
@@ -753,6 +759,7 @@ export default function AdminApp() {
 
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-slate-950">
+      <RequestFeedback />
       <div
         aria-live="polite"
         className="fixed right-4 top-4 z-[100] w-[calc(100%-2rem)] max-w-md space-y-3 sm:right-6 sm:top-6"

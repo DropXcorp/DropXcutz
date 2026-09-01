@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useMemo, useState } from "react";
+import RequestFeedback from "./RequestFeedback";
 
 type Salon = {
   name: string;
@@ -36,6 +37,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     mode === "custom"
       ? `${apiUrl}/v1/public`
       : `${apiUrl}/public/v1/salons/${slug}`;
+  window.dispatchEvent(new CustomEvent("dropxcutz:request-start"));
+  try {
   const response = await fetch(`${base}${path}`, {
     ...init,
     headers: {
@@ -51,6 +54,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok)
     throw new Error(body?.error ?? "We could not complete that request.");
   return body?.data as T;
+  } finally {
+    window.dispatchEvent(new CustomEvent("dropxcutz:request-end"));
+  }
 }
 
 export default function PublicSite() {
@@ -143,6 +149,7 @@ export default function PublicSite() {
   };
   return (
     <main className="shell">
+      <RequestFeedback />
       <section className="hero">
         <div>
           <span className="eyebrow">Online appointment booking</span>

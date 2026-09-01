@@ -937,6 +937,7 @@ function InventoryView() {
 function BillingView() {
   const { invoices, customers, appointments, addInvoice, deleteInvoice } = useERPStore();
   const [invoiceAppointmentId, setInvoiceAppointmentId] = useState("");
+  const [invoiceCustomerId, setInvoiceCustomerId] = useState("");
   const [invoiceAmount, setInvoiceAmount] = useState("");
 
   const downloadInvoice = (invoice: Invoice) => {
@@ -988,29 +989,35 @@ function BillingView() {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
             await addInvoice({
-              customerId: String(form.get("customerId")),
+              customerId: invoiceCustomerId || String(form.get("customerId")),
               appointmentId: invoiceAppointmentId || undefined,
               amount: invoiceAppointmentId ? Number(invoiceAmount) : Number(form.get("amount")),
               status: form.get("status") as Invoice["status"],
             });
             e.currentTarget.reset();
             setInvoiceAppointmentId("");
+            setInvoiceCustomerId("");
             setInvoiceAmount("");
           }}
           className="grid gap-3 p-5 sm:grid-cols-4"
         >
-          <select required name="customerId" className={inputClass}>
+          <select required name="customerId" value={invoiceCustomerId} onChange={(event) => setInvoiceCustomerId(event.target.value)} className={inputClass}>
             <option value="">Select Customer...</option>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} ({c.phone})
               </option>
             ))}
+            {invoiceCustomerId && !customers.some((c) => c.id === invoiceCustomerId) && invoiceAppointmentId && (() => {
+              const linked = appointments.find((item) => item.id === invoiceAppointmentId);
+              return linked ? <option value={invoiceCustomerId}>{linked.customer.name} (linked appointment)</option> : null;
+            })()}
           </select>
           <select name="appointmentId" className={inputClass} value={invoiceAppointmentId} onChange={(event) => {
             const id = event.target.value;
             setInvoiceAppointmentId(id);
             const appointment = appointments.find((item) => item.id === id);
+            setInvoiceCustomerId(appointment?.customer.id ?? "");
             const amount = appointment ? String(appointment.payment.amount) : "";
             setInvoiceAmount(amount);
             const amountInput = event.currentTarget.form?.elements.namedItem("amount") as HTMLInputElement | null;
