@@ -23,7 +23,7 @@ export async function listSalons(_request: Request, response: Response) {
   });
   ok(
     response,
-    salons.map(({ invoices, ...salon }) => ({
+    salons.map(({ invoices, razorpayKeySecretCipher: _keySecret, razorpayWebhookCipher: _webhookSecret, ...salon }) => ({
       ...salon,
       taxRate: Number(salon.taxRate),
       paidRevenue: invoices.reduce(
@@ -47,7 +47,7 @@ export async function getSalon(request: Request, response: Response) {
     },
   });
   if (!salon) throw new ApiError(404, "Salon not found.");
-  const { invoices, ...data } = salon;
+  const { invoices, razorpayKeySecretCipher: _keySecret, razorpayWebhookCipher: _webhookSecret, ...data } = salon;
   ok(response, {
     ...data,
     taxRate: Number(salon.taxRate),
@@ -247,7 +247,7 @@ export async function platformOverview(_request: Request, response: Response) {
       totalAppointments,
       totalRevenue,
     },
-    salons: recentSalons.map(({ invoices, ...salon }) => ({
+    salons: recentSalons.map(({ invoices, razorpayKeySecretCipher: _keySecret, razorpayWebhookCipher: _webhookSecret, ...salon }) => ({
       ...salon,
       taxRate: Number(salon.taxRate),
       paidRevenue: invoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0),

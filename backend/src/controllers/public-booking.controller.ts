@@ -81,7 +81,7 @@ function durationEnd(
   );
 }
 
-async function salonForPublic(response: Response) {
+export async function salonForPublic(response: Response) {
   const salon = response.locals.salon;
   if (!salon) throw new ApiError(401, "A valid integration key is required.");
   if (!salon.allowOnlineBooking)
@@ -108,6 +108,11 @@ export async function publicSalon(request: Request, response: Response) {
       openingTime: salon.openingTime,
       closingTime: salon.closingTime,
       timezone: salon.timezone,
+      onlinePaymentsConfigured: Boolean(
+        salon.allowOnlinePayments &&
+          salon.razorpayKeyId &&
+          salon.razorpayKeySecretCipher,
+      ),
     },
   });
 }

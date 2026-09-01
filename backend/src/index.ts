@@ -14,6 +14,7 @@ import { publicRouter } from "./routes/public.routes";
 import { publicSlugRouter } from "./routes/public-slug.routes";
 import { startScheduler } from "./services/scheduler.service";
 import { handleRazorpayWebhook } from "./controllers/billing.controller";
+import { handleSalonRazorpayWebhook } from "./controllers/public-payment.controller";
 import path from "node:path";
 
 const app = express();
@@ -51,6 +52,11 @@ app.post(
   "/api/webhooks/razorpay",
   express.raw({ type: "application/json" }),
   handleRazorpayWebhook,
+);
+app.post(
+  "/api/webhooks/razorpay/salon",
+  express.raw({ type: "application/json" }),
+  handleSalonRazorpayWebhook,
 );
 
 app.use(express.json({ limit: "6mb" }));

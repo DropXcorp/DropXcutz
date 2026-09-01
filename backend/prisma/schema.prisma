@@ -202,6 +202,9 @@ model Salon {
   appointmentSlotMinutes  Int                   @default(30)
   cancellationWindowHours Int                   @default(4)
   allowOnlineBooking      Boolean               @default(true)
+  razorpayKeyId           String?               @db.VarChar(80)
+  razorpayKeySecretCipher String?
+  razorpayWebhookCipher   String?
   adminName               String                @db.VarChar(160)
   adminEmail              String                @db.VarChar(200)
   lowStockAlerts          Boolean               @default(true)
@@ -962,6 +965,9 @@ model Payment {
   method        PaymentMethod
   status        PaymentStatus @default(PAID)
   transactionId String?       @unique @db.VarChar(160)
+  razorpayOrderId   String?       @unique @db.VarChar(80)
+  razorpayPaymentId String?       @unique @db.VarChar(80)
+  razorpayRefundId  String?       @unique @db.VarChar(80)
   paidAt        DateTime      @default(now())
   createdAt     DateTime      @default(now())
   invoice       Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
