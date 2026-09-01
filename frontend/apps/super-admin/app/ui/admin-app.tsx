@@ -133,34 +133,37 @@ const copy: Record<Section, string> = {
 };
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  window.dispatchEvent(new CustomEvent("dropxcutz:request-start"));
+  const requestId = Math.random().toString(36).slice(2);
+  window.dispatchEvent(new CustomEvent("dropxcutz:request-start", {
+    detail: { requestId, button: document.activeElement instanceof HTMLButtonElement ? document.activeElement : null },
+  }));
   try {
-  const r = await fetch(url, {
-    ...init,
-    headers: { "content-type": "application/json", ...init?.headers },
-  });
-  if (r.status === 204) return undefined as T;
-  const b = (await r.json().catch(() => ({}))) as {
-    data?: T;
-    error?: string;
-    details?: Array<{ field?: string; message?: string }>;
-  };
-  if (!r.ok) {
-    const details = b.details
-      ?.map(
-        (detail) =>
-          `${detail.field || "request"}: ${detail.message || "invalid value"}`,
-      )
-      .join("; ");
-    throw new Error(
-      details
-        ? `${b.error ?? "Request failed."} ${details}`
-        : (b.error ?? "Request failed."),
-    );
-  }
-  return (b.data ?? b) as T;
+    const r = await fetch(url, {
+      ...init,
+      headers: { "content-type": "application/json", ...init?.headers },
+    });
+    if (r.status === 204) return undefined as T;
+    const b = (await r.json().catch(() => ({}))) as {
+      data?: T;
+      error?: string;
+      details?: Array<{ field?: string; message?: string }>;
+    };
+    if (!r.ok) {
+      const details = b.details
+        ?.map(
+          (detail) =>
+            `${detail.field || "request"}: ${detail.message || "invalid value"}`,
+        )
+        .join("; ");
+      throw new Error(
+        details
+          ? `${b.error ?? "Request failed."} ${details}`
+          : (b.error ?? "Request failed."),
+      );
+    }
+    return (b.data ?? b) as T;
   } finally {
-    window.dispatchEvent(new CustomEvent("dropxcutz:request-end"));
+    window.dispatchEvent(new CustomEvent("dropxcutz:request-end", { detail: { requestId } }));
   }
 }
 
@@ -327,7 +330,7 @@ export default function AdminApp() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setSubmitting(true);
-    setActionLabel("Signing inÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦");
+    setActionLabel("Signing in…");
     setError("");
     try {
       const session = await api<{ user?: { role?: string }; salon?: unknown }>(
@@ -396,7 +399,7 @@ export default function AdminApp() {
       dailyRevenueDigest: true,
     };
     setSubmitting(true);
-    setActionLabel("Creating salon workspaceÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦");
+    setActionLabel("Creating salon workspace…");
     setError("");
     try {
       await api("/api/salons", { method: "POST", body: JSON.stringify(p) });
@@ -435,7 +438,7 @@ export default function AdminApp() {
   async function handleUpdateSalonStatus(salonId: string, status: Status) {
     setSubmitting(true);
     setActionLabel(
-      `Updating salon status to ${status}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦`,
+      `Updating salon status to ${status}…`,
     );
     setError("");
     try {
@@ -457,7 +460,7 @@ export default function AdminApp() {
 
   async function handleEditSalon(id: string, patch: Partial<Salon>) {
     setSubmitting(true);
-    setActionLabel("Saving salon detailsÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦");
+    setActionLabel("Saving salon details…");
     setError("");
     try {
       await api(`/api/salons/${id}`, {
@@ -480,7 +483,7 @@ export default function AdminApp() {
       return;
     setSubmitting(true);
     setActionLabel(
-      `Archiving ${salon.salonName}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦`,
+      `Archiving ${salon.salonName}…`,
     );
     setError("");
     try {
@@ -499,7 +502,7 @@ export default function AdminApp() {
     if (!confirm(`Restore "${salon.salonName}" as a suspended salon?`)) return;
     setSubmitting(true);
     setActionLabel(
-      `Restoring ${salon.salonName}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦`,
+      `Restoring ${salon.salonName}…`,
     );
     setError("");
     try {
@@ -519,7 +522,7 @@ export default function AdminApp() {
   async function handleUpgradePlan(sub: Subscription, newPlan: string) {
     setSubmitting(true);
     setActionLabel(
-      `Updating ${sub.salonName} planÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦`,
+      `Updating ${sub.salonName} plan…`,
     );
     setError("");
     try {
@@ -541,7 +544,7 @@ export default function AdminApp() {
 
   async function handleExtendTrial(id: string, newDate: string) {
     setSubmitting(true);
-    setActionLabel("Extending trialÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦");
+    setActionLabel("Extending trial…");
     setError("");
     try {
       await api(`/api/salons/${id}`, {
@@ -568,7 +571,7 @@ export default function AdminApp() {
     platformRoleId?: string;
   }) {
     setSubmitting(true);
-    setActionLabel("Creating userÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦");
+    setActionLabel("Creating user…");
     setError("");
     try {
       const newUser = await api<PlatformUser>("/api/platform/users", {
@@ -630,7 +633,7 @@ export default function AdminApp() {
 
   async function handleResetPassword(id: string, newPass: string) {
     setSubmitting(true);
-    setActionLabel("Resetting passwordÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦");
+    setActionLabel("Resetting password…");
     setError("");
     try {
       await api(`/api/platform/users/${id}`, {
@@ -650,7 +653,7 @@ export default function AdminApp() {
   async function toggleUser(u: PlatformUser) {
     setSubmitting(true);
     setActionLabel(
-      `${u.active ? "Disabling" : "Enabling..."} ${u.name}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦`,
+      `${u.active ? "Disabling" : "Enabling..."} ${u.name}…`,
     );
     setError("");
     try {
@@ -672,7 +675,7 @@ export default function AdminApp() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setSubmitting(true);
-    setActionLabel("Saving platform settingsÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦");
+    setActionLabel("Saving platform settings…");
     setError("");
     try {
       const x = await api<SettingsData>("/api/platform/settings", {
@@ -700,7 +703,7 @@ export default function AdminApp() {
     const formElement = e.currentTarget;
     const form = new FormData(formElement);
     setSubmitting(true);
-    setActionLabel("Sending announcementÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦");
+    setActionLabel("Sending announcement…");
     setError("");
     try {
       const result = await api<{ count: number }>(
@@ -917,7 +920,7 @@ export default function AdminApp() {
                 </button>
                 {sectionLoading && (
                   <p className="text-sm text-zinc-500">
-                    Loading plansÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦
+                    Loading plans…
                   </p>
                 )}
                 {list<Plan>(data).map((plan) => (
@@ -945,7 +948,7 @@ export default function AdminApp() {
                     <p className="mt-4 text-sm font-semibold text-zinc-900">
                       {plan.monthlyPrice == null
                         ? "Custom pricing"
-                        : `ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹${plan.monthlyPrice}/month`}
+                        : `₹${plan.monthlyPrice}/month`}
                     </p>
                     <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
                       Included features
@@ -1784,7 +1787,7 @@ export function LegacySalonEntitlementsModal({
           )}
           {busy ? (
             <p className="text-sm text-zinc-500">
-              LoadingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦
+              Loading…
             </p>
           ) : (
             <>
@@ -2017,7 +2020,7 @@ function PlanEditor({
             Cancel
           </button>
           <button disabled={saving} className={buttonClass}>
-            {saving ? "SavingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦" : "Save plan"}
+            {saving ? "Saving…" : "Save plan"}
           </button>
         </div>
       </form>

@@ -26,6 +26,7 @@ import {
   ShoppingCart,
   Crown,
   Globe,
+  CreditCard,
 } from "lucide-react";
 
 import AppLogo from "@/src/components/layout/AppLogo";
@@ -210,6 +211,11 @@ const menu = [
         name: "Settings",
         href: "/settings",
         icon: Settings,
+      },
+      {
+        name: "Online Payments",
+        href: "/settings/integration",
+        icon: CreditCard,
       },
       {
         name: "Website",

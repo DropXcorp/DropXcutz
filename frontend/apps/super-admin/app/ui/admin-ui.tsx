@@ -1065,7 +1065,7 @@ export function UsersView({
                     : "bg-blue-100 text-blue-800 border border-blue-200"
                 }`}
               >
-                {u.role.replaceAll("_", " ")}
+                {String(u.role ?? "Unknown").replaceAll("_", " ")}
               </span>
               {u.role === "PLATFORM_ADMIN" && <select value={u.platformRole?.id ?? ""} onChange={(event) => onAssignPlatformRole(u, event.target.value || null)} className="mt-2 block rounded border border-zinc-200 bg-white px-2 py-1 text-xs"><option value="">Legacy full access</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select>}
             </td>

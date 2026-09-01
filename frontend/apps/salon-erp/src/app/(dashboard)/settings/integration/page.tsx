@@ -1,6 +1,5 @@
-import { notFound } from "next/navigation";
+import { PaymentGatewaySettings } from "@/src/components/settings/IntegrationSettingsPanel";
 
-export default function WebsiteIntegrationPage() {
-  // API-key management belongs to the platform administrator, not salon staff.
-  notFound();
+export default function PaymentIntegrationPage() {
+  return <PaymentGatewaySettings />;
 }

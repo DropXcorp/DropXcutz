@@ -194,7 +194,3 @@ select,
 textarea {
   -webkit-tap-highlight-color: transparent;
 }
-
-button[data-request-busy] { position: relative; color: transparent !important; }
-button[data-request-busy] > * { visibility: hidden; }
-button[data-request-busy]::after { content: "Saving..."; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; }
