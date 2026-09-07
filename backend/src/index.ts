@@ -18,7 +18,8 @@ import { handleSalonRazorpayWebhook } from "./controllers/public-payment.control
 import path from "node:path";
 
 const app = express();
-const port = Number(process.env.PORT_NO ?? 5000);
+// Render and most managed hosts provide PORT; PORT_NO remains supported locally.
+const port = Number(process.env.PORT ?? process.env.PORT_NO ?? 5000);
 const isDevelopment = process.env.NODE_ENV !== "production";
 const limits = {
   login: isDevelopment ? 100 : 10,

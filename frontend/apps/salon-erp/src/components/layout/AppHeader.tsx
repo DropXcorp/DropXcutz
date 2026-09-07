@@ -38,7 +38,7 @@ export default function AppHeader() {
   }, [refresh]);
 
   useEffect(() => {
-    const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
+    const api = "/api";
     const stream = new EventSource(`${api}/erp/notifications/stream`, { withCredentials: true });
     stream.addEventListener("notification", () => void refresh());
     return () => stream.close();
@@ -78,7 +78,7 @@ export default function AppHeader() {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api"}/erp/auth/logout`, {
+      await fetch("/api/erp/auth/logout", {
         method: "POST",
         credentials: "include",
       });

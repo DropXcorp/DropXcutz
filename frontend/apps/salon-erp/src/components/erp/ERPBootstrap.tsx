@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { LoaderCircle, X } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { useERPStore, type ERPUser, type ERPSalon } from "@/src/lib/erp-store";
-const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
+const api = "/api";
 export default function ERPBootstrap({
   children,
 }: {
