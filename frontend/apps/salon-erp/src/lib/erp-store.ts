@@ -433,7 +433,7 @@ const emptySettings: SalonSettings = {
   dailyRevenueDigest: true,
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
+const API_URL = "/api";
 
 export async function erpApi<T>(path: string, init?: RequestInit): Promise<T> {
   const requestId = Math.random().toString(36).slice(2);

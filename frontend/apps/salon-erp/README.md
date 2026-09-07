@@ -1,6 +1,8 @@
 # DropXCutz salon ERP
 
-The salon operations frontend. It loads tenant-scoped data from the backend using `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SALON_CODE`.
+The salon operations frontend proxies browser API calls through its own `/api`
+origin. This makes deployed login reliable even when the ERP and API use
+different domains.
 
 ```bash
 npm install
@@ -9,7 +11,8 @@ npm run dev
 
 Run it on port 3000 with the backend on port 5000. The default local salon code is `dropx-studio`.
 
-Create `.env.local` from `.env.example` before running it. Both values are safe for the browser: the API URL and the public salon code.
+Create `.env.local` from `.env.example` before running it. Set
+`SALON_BACKEND_URL` to the backend URL ending in `/api`.
 
 ## Vercel deployment
 
@@ -18,6 +21,7 @@ Directory** to `frontend/apps/salon-erp` and use the **Next.js** framework
 preset. After saving that setting, redeploy and open the URL from that new
 deployment, not a previous repository-root deployment.
 
-Set `NEXT_PUBLIC_API_URL` to the publicly deployed API URL ending in `/api` and
-set `NEXT_PUBLIC_SALON_CODE` to the salon code for that deployment. The API must
-allow the Vercel domain in `FRONTEND_ORIGINS`.
+Set `SALON_BACKEND_URL` to the publicly deployed API URL ending in `/api`. The
+browser will call the same-origin `/api` proxy, so the authentication cookie is
+first-party. Also set the API's `FRONTEND_ORIGINS` to include the deployed ERP
+URL, and set `COOKIE_SECURE=true` in production.

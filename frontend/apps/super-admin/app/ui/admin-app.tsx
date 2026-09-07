@@ -403,12 +403,12 @@ export default function AdminApp() {
     setError("");
     try {
       await api("/api/salons", { method: "POST", body: JSON.stringify(p) });
-      const erpUrl = process.env.NEXT_PUBLIC_ERP_URL ?? "http://localhost:3000";
+      const erpUrl = process.env.NEXT_PUBLIC_ERP_URL?.trim();
       const credentials = [
         "DropXcutz salon admin login",
         `Salon: ${p.salonName}`,
         `Salon code: ${p.code}`,
-        `ERP URL: ${erpUrl}`,
+        `ERP URL: ${erpUrl || "Not configured — ask your platform administrator"}`,
         `Email: ${p.adminEmail}`,
         `Password: ${p.adminPassword}`,
       ].join("\n");
