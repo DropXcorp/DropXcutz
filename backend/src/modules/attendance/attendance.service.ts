@@ -19,6 +19,17 @@ export class AttendanceService {
     if (input.branchId) await this.branch(salonId, input.branchId);
     const checkIn = input.checkIn ?? new Date();
     return prisma.$transaction(async (client) => {
+      // Attendance is one daily record per employee. Updating its status or
+      // checking out must happen on that record rather than creating another.
+      const existing = await client.attendance.findFirst({
+        where: {
+          employeeId: input.employeeId,
+          checkIn: this.dayRange(checkIn),
+        },
+        select: { id: true },
+      });
+      if (existing)
+        throw new ApiError(409, "Attendance is already recorded for this employee today.");
       const item = await client.attendance.create({
         data: {
           employeeId: input.employeeId,
@@ -76,7 +87,11 @@ export class AttendanceService {
   async list(salonId: string, query: Query) {
     if (query.employeeId) await this.employee(salonId, query.employeeId);
     if (query.branchId) await this.branch(salonId, query.branchId);
-    const range = query.month ? this.monthRange(query.month) : undefined;
+    const range = query.date
+      ? this.dayRange(new Date(`${query.date}T00:00:00.000Z`))
+      : query.month
+        ? this.monthRange(query.month)
+        : undefined;
     const where: Prisma.AttendanceWhereInput = {
       employee: { salonId },
       ...(query.employeeId && { employeeId: query.employeeId }),
@@ -168,6 +183,14 @@ export class AttendanceService {
         Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1),
       ),
     };
+  }
+  private dayRange(date: Date) {
+    const start = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+    ));
+    return { gte: start, lt: new Date(start.getTime() + 86_400_000) };
   }
   private async employee(salonId: string, id: string) {
     if (
