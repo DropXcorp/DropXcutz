@@ -337,7 +337,7 @@ type ERPState = Snapshot & {
   updateExpense: (id: string, item: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
 
-  fetchAttendance: () => Promise<void>;
+  fetchAttendance: (filters?: { month?: string; date?: string }) => Promise<void>;
   recordAttendance: (input: {
     employeeId: string;
     status: AttendanceRecord["status"];
@@ -1078,9 +1078,10 @@ export const useERPStore = create<ERPState>((set, get) => ({
     }
   },
 
-  fetchAttendance: async () => {
+  fetchAttendance: async (filters) => {
     try {
-      const res = await api<unknown>("/attendance");
+      const params = new URLSearchParams({ limit: "100", ...(filters?.month ? { month: filters.month } : {}), ...(filters?.date ? { date: filters.date } : {}) });
+      const res = await api<unknown>(`/attendance?${params}`);
       set({ attendance: toList<AttendanceRecord>(res) });
     } catch (error) {
       set({ error: message(error) });

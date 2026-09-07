@@ -16,7 +16,7 @@ export default function PhaseTwoConsole({ module }: { module: PhaseTwoModule }) 
     "service-setup": ["Service setup", "Organize services and assign staff skills."], leave: ["Leave requests", "Apply, approve, reject, or cancel staff leave."], payments: ["Payments & refunds", "Record collections and refund completed payments."], marketing: ["Offers & gallery", "Manage promotions and website gallery images."], "time-slots": ["Time slots", "Create and block online-booking capacity by branch."], "audit-log": ["Audit log", "Review salon administration activity."],
   };
   const [title, subtitle] = titles[module];
-  return <div className="mx-auto max-w-7xl space-y-6 pb-12"><header className={panel}><h1 className="text-2xl font-bold text-zinc-950">{title}</h1><p className="mt-1 text-sm text-zinc-500">{subtitle}</p></header>{module === "service-setup" && <ServiceSetup />}{module === "leave" && <Leave />}{module === "payments" && <Payments />}{module === "marketing" && <Marketing />}{module === "time-slots" && <TimeSlots />}{module === "audit-log" && <AuditLog />}</div>;
+  return <div className="mx-auto max-w-7xl space-y-6 pb-12"><header className={panel}><h1 className="text-2xl font-bold text-zinc-950">{title}</h1><p className="mt-1 text-sm text-zinc-500">{subtitle}</p></header>{module === "service-setup" && <ServiceSetup />}{module === "leave" && <LeaveRequests />}{module === "payments" && <Payments />}{module === "marketing" && <Marketing />}{module === "time-slots" && <TimeSlots />}{module === "audit-log" && <AuditLog />}</div>;
 }
 
 function ServiceSetup() {
@@ -26,9 +26,39 @@ function ServiceSetup() {
   return <div className="grid gap-6 lg:grid-cols-2"><section className={panel}><h2 className="font-bold">Service categories</h2><form className="mt-4 grid gap-2" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); void erpApi("/service-categories", { method: "POST", body: JSON.stringify({ name: f.get("name"), description: f.get("description") || null }) }).then(() => { e.currentTarget.reset(); return load(); }); }}><input required name="name" placeholder="Hair, Skin, Spa…" className={input}/><input name="description" placeholder="Optional description" className={input}/><button className={button}>Add category</button></form><div className="mt-4 space-y-2">{categories.map((c) => <div key={c.id} className="flex items-center justify-between rounded-xl border p-3 text-sm"><span><b>{String(c.name)}</b><span className="ml-2 text-zinc-500">{String(c.serviceCount ?? 0)} services</span></span><button onClick={() => void erpApi(`/service-categories/${c.id}`, { method: "DELETE" }).then(load)} className="text-rose-700">Delete</button></div>)}</div></section><section className={panel}><h2 className="font-bold">Staff service skills</h2><select value={employeeId} onChange={(e) => void loadSkills(e.target.value)} className={`mt-4 ${input}`}><option value="">Select employee</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>{employeeId && <div className="mt-4 space-y-2">{services.map((service) => { const assigned = skills.some((skill) => skill.id === service.id); return <label key={service.id} className="flex items-center justify-between rounded-xl border p-3 text-sm"><span>{service.name}</span><input type="checkbox" checked={assigned} onChange={() => void erpApi(assigned ? `/employee-services/${employeeId}/${service.id}` : "/employee-services", { method: assigned ? "DELETE" : "POST", body: assigned ? undefined : JSON.stringify({ employeeId, serviceId: service.id }) }).then(() => loadSkills(employeeId))}/></label>; })}</div>}</section></div>;
 }
 
+/* eslint-disable @typescript-eslint/no-unused-vars -- retained temporarily while the safer leave UI replaces this legacy view. */
 function Leave() {
-  const { employees } = useERPStore(); const [items, setItems] = useState<Item[]>([]); const load = useCallback(async () => setItems(list<Item>(await erpApi("/leave-requests"))), []); useEffect(() => { void load(); }, [load]);
+  const { employees } = useERPStore(); const [items, setItems] = useState<Item[]>([]); const [error, setError] = useState(""); const [saving, setSaving] = useState(false); const load = useCallback(async () => { try { setItems(list<Item>(await erpApi("/leave-requests?limit=100"))); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load leave requests."); } }, []); useEffect(() => { void load(); }, [load]);
   return <div className="grid gap-6 lg:grid-cols-[360px_1fr]"><form className={panel} onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); void erpApi("/leave-requests", { method: "POST", body: JSON.stringify({ employeeId: f.get("employeeId"), startDate: f.get("startDate"), endDate: f.get("endDate"), reason: f.get("reason") || null }) }).then(() => { e.currentTarget.reset(); return load(); }); }}><h2 className="font-bold">New leave request</h2><div className="mt-4 space-y-3"><select required name="employeeId" className={input}><option value="">Select employee</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select><input required type="date" name="startDate" className={input}/><input required type="date" name="endDate" className={input}/><textarea name="reason" placeholder="Reason" className={input}/><button className={button}>Submit leave</button></div></form><section className={panel}><h2 className="font-bold">Requests</h2><div className="mt-4 space-y-3">{items.map((item) => <article key={item.id} className="rounded-xl border p-4 text-sm"><b>{String(item.employeeName)}</b><p className="mt-1 text-zinc-500">{String(item.startDate).slice(0,10)} to {String(item.endDate).slice(0,10)} · {String(item.status)}</p><p className="mt-1">{String(item.reason ?? "No reason supplied")}</p>{item.status === "PENDING" && <div className="mt-3 flex gap-2">{["APPROVED", "REJECTED", "CANCELLED"].map((status) => <button key={status} onClick={() => void erpApi(`/leave-requests/${item.id}`, { method: "PATCH", body: JSON.stringify({ status }) }).then(load)} className="rounded-lg border px-2 py-1 text-xs">{status}</button>)}</div>}</article>)}</div></section></div>;
+}
+
+/* eslint-enable @typescript-eslint/no-unused-vars */
+function LeaveRequests() {
+  const { employees } = useERPStore();
+  const [items, setItems] = useState<Item[]>([]);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const load = useCallback(async () => {
+    try { setItems(list<Item>(await erpApi("/leave-requests?limit=100"))); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load leave requests."); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement);
+    const startDate = String(form.get("startDate")); const endDate = String(form.get("endDate"));
+    if (endDate < startDate) { setError("End date must be on or after the start date."); return; }
+    setSaving(true); setError("");
+    try { await erpApi("/leave-requests", { method: "POST", body: JSON.stringify({ employeeId: form.get("employeeId"), startDate, endDate, reason: form.get("reason") || null }) }); formElement.reset(); await load(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not submit leave request."); }
+    finally { setSaving(false); }
+  };
+  const changeStatus = async (id: string, status: string) => {
+    setSaving(true); setError("");
+    try { await erpApi(`/leave-requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }); await load(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not update leave request."); }
+    finally { setSaving(false); }
+  };
+  return <div className="grid gap-6 lg:grid-cols-[360px_1fr]"><form className={panel} onSubmit={submit}><h2 className="font-bold">New leave request</h2><p className="mt-1 text-sm text-zinc-500">Submit one request per employee and date range.</p>{error && <p role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}<div className="mt-4 space-y-3"><select required name="employeeId" className={input}><option value="">Select employee</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select><input required type="date" name="startDate" aria-label="Start date" className={input}/><input required type="date" name="endDate" aria-label="End date" className={input}/><textarea name="reason" placeholder="Reason (optional)" className={input}/><button disabled={saving} type="submit" className={`${button} disabled:opacity-50`}>{saving ? "Saving..." : "Submit leave"}</button></div></form><section className={panel}><h2 className="font-bold">Requests</h2><div className="mt-4 space-y-3">{items.map((item) => <article key={item.id} className="rounded-xl border p-4 text-sm"><b>{String(item.employeeName)}</b><p className="mt-1 text-zinc-500">{String(item.startDate).slice(0, 10)} to {String(item.endDate).slice(0, 10)} · {String(item.status)}</p><p className="mt-1">{String(item.reason ?? "No reason supplied")}</p>{item.status === "PENDING" && <div className="mt-3 flex flex-wrap gap-2">{["APPROVED", "REJECTED", "CANCELLED"].map((status) => <button type="button" disabled={saving} key={status} onClick={() => void changeStatus(item.id, status)} className="rounded-lg border px-2 py-1 text-xs disabled:opacity-50">{status}</button>)}</div>}</article>)}{!items.length && <p className="py-8 text-center text-sm text-zinc-500">No leave requests yet.</p>}</div></section></div>;
 }
 
 function Payments() {

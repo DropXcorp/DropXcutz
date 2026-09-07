@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
@@ -1342,7 +1342,28 @@ function BranchesView() {
 // 8. ATTENDANCE VIEW
 // -------------------------------------------------------------
 function AttendanceView() {
-  const { attendance, employees, branches, recordAttendance, checkOutAttendance, updateAttendance } = useERPStore();
+  const { attendance, employees, branches, fetchAttendance, recordAttendance, checkOutAttendance, updateAttendance } = useERPStore();
+  const today = new Date().toLocaleDateString("en-CA");
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [recording, setRecording] = useState(false);
+  const month = selectedDate.slice(0, 7);
+  useEffect(() => { void fetchAttendance({ month }); }, [fetchAttendance, month]);
+
+  const dayRecords = attendance.filter((record) =>
+    new Date(record.checkIn).toLocaleDateString("en-CA") === selectedDate &&
+    (!employeeFilter || record.employeeId === employeeFilter),
+  );
+  const attendanceDays = new Set(
+    attendance
+      .filter((record) => !employeeFilter || record.employeeId === employeeFilter)
+      .map((record) => new Date(record.checkIn).toLocaleDateString("en-CA")),
+  );
+  const daysInMonth = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+  const firstWeekday = new Date(`${month}-01T00:00:00`).getDay();
+  const todayRecorded = new Set(
+    attendance.filter((record) => new Date(record.checkIn).toLocaleDateString("en-CA") === today).map((record) => record.employeeId),
+  );
 
   return (
     <div className="space-y-6">
@@ -1351,11 +1372,14 @@ function AttendanceView() {
           onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            await submitAndReset(e.currentTarget, () => recordAttendance({
-              employeeId: String(form.get("employeeId")),
-              status: form.get("status") as AttendanceRecord["status"],
-              branchId: String(form.get("branchId") || "") || null,
-            }));
+            setRecording(true);
+            try {
+              await submitAndReset(e.currentTarget, () => recordAttendance({
+                employeeId: String(form.get("employeeId")),
+                status: form.get("status") as AttendanceRecord["status"],
+                branchId: String(form.get("branchId") || "") || null,
+              }));
+            } finally { setRecording(false); }
           }}
           className="grid gap-3 p-5 sm:grid-cols-4"
         >
@@ -1363,7 +1387,7 @@ function AttendanceView() {
             <option value="">Select Employee...</option>
             {employees.map((e) => (
               <option key={e.id} value={e.id}>
-                {e.name}
+                {e.name}{todayRecorded.has(e.id) ? " — already recorded today" : ""}
               </option>
             ))}
           </select>
@@ -1377,15 +1401,35 @@ function AttendanceView() {
             <option value="">Primary salon location</option>
             {branches.filter((branch) => branch.status === "ACTIVE").map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
           </select>
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
-            <Plus className="h-4 w-4" /> Record Check-In
+          <button disabled={recording} className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60">
+            <Plus className="h-4 w-4" /> {recording ? "Recording…" : "Record Check-In"}
           </button>
         </form>
       </SectionPanel>
 
-      <SectionPanel title="Attendance Logs" subtitle="Check employees out, correct status, and review shift hours">
+      <SectionPanel title="Attendance history" subtitle="Choose a day to see who attended. Green dates have attendance records.">
+        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-sm font-medium text-zinc-700">Month<input type="month" value={month} onChange={(event) => setSelectedDate(`${event.target.value}-01`)} className={`${inputClass} mt-1 w-full`} /></label>
+            <label className="text-sm font-medium text-zinc-700">Date<input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className={`${inputClass} mt-1 w-full`} /></label>
+            <label className="text-sm font-medium text-zinc-700">Employee<select value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)} className={`${inputClass} mt-1 w-full`}><option value="">All employees</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label>
+          </div>
+          <button type="button" onClick={() => setSelectedDate(today)} className="self-end rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50">Today</button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 border-t p-5 text-center text-xs">
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day) => <span key={day} className="pb-1 font-semibold text-zinc-400">{day}</span>)}
+          {Array.from({ length: firstWeekday }).map((_, index) => <span key={`empty-${index}`} />)}
+          {Array.from({ length: daysInMonth }, (_, index) => {
+            const date = `${month}-${String(index + 1).padStart(2, "0")}`;
+            const attended = attendanceDays.has(date);
+            return <button type="button" key={date} onClick={() => setSelectedDate(date)} title={attended ? "Attendance recorded" : "No attendance recorded"} className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full font-semibold ${date === selectedDate ? "bg-zinc-950 text-white" : attended ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200" : "text-zinc-500 hover:bg-zinc-100"}`}>{index + 1}</button>;
+          })}
+        </div>
+      </SectionPanel>
+
+      <SectionPanel title="Attendance Logs" subtitle={`Attendance for ${new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`}>
         <DataTable heads={["Staff Name", "Check in", "Check out", "Hours", "Status", "Actions"]}>
-          {attendance.map((a) => {
+          {dayRecords.map((a) => {
             const emp = employees.find((e) => e.id === a.employeeId);
             return (
               <tr key={a.id} className="hover:bg-zinc-50/50">
@@ -1404,10 +1448,10 @@ function AttendanceView() {
               </tr>
             );
           })}
-          {attendance.length === 0 && (
+          {dayRecords.length === 0 && (
             <tr>
               <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
-                No attendance recorded today.
+                No attendance recorded for this date.
               </td>
             </tr>
           )}

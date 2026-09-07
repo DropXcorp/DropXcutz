@@ -4,6 +4,7 @@ let shuttingDown = false;
 
 const children = [
   ["api", process.platform === "win32" ? "bun.cmd" : "bun", ["--watch", "src/index.ts"], "backend"],
+  ["admin", process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], "frontend/apps/super-admin"],
   ["erp", process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], "frontend/apps/salon-erp"],
   ["website", process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], "frontend/apps/public-site"],
 ].map(([name, command, args, cwd]) => {

@@ -45,5 +45,9 @@ export const attendanceQuery = z.object({
     .string()
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
     .optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|[12]\d|3[01])$/)
+    .optional(),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
