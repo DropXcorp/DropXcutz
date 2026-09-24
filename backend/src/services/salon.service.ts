@@ -475,6 +475,12 @@ export async function saveAppointment(
     0,
   );
   const scheduledAt = parseWallTime(input.schedule.date, input.schedule.time);
+  // The client applies discounts/loyalty; accept its final total but never above the catalog subtotal.
+  const requestedTotal = Number(input.payment.amount ?? subtotal);
+  const totalAmount = Number.isFinite(requestedTotal)
+    ? Math.min(Math.max(requestedTotal, 0), subtotal)
+    : subtotal;
+  const employeeId = input.stylist.id === "unassigned" ? null : input.stylist.id;
   const lines = services.map((service) => ({
     serviceId: service.id,
     serviceName: service.name,
@@ -497,8 +503,7 @@ export async function saveAppointment(
       durationMinutes,
       subtotal,
       taxAmount: 0,
-      totalAmount: subtotal,
-      amountPaid: input.payment.status === "Paid" ? subtotal : 0,
+      totalAmount,
       paymentStatus:
         paymentStatusToDb[
           input.payment.status as keyof typeof paymentStatusToDb
@@ -509,22 +514,74 @@ export async function saveAppointment(
         ],
       notes: input.notes || null,
     };
-    if (id) {
-      const existing = await client.appointment.findFirst({
-        where: { id, salonId },
-        select: { id: true },
+    const existing = id
+      ? await client.appointment.findFirst({
+          where: { id, salonId },
+          select: {
+            id: true,
+            scheduledAt: true,
+            employeeId: true,
+            durationMinutes: true,
+            amountPaid: true,
+          },
+        })
+      : null;
+    if (id && !existing) throw new ApiError(404, "Appointment not found.");
+    const scheduleChanged =
+      !existing ||
+      existing.scheduledAt.getTime() !== scheduledAt.getTime() ||
+      existing.employeeId !== employeeId ||
+      existing.durationMinutes !== durationMinutes;
+    if (
+      employeeId &&
+      scheduleChanged &&
+      !["Cancelled", "No Show", "Completed"].includes(input.status)
+    ) {
+      const start = scheduledAt.getTime();
+      const end = start + durationMinutes * 60000;
+      const nearby = await client.appointment.findMany({
+        where: {
+          salonId,
+          employeeId,
+          ...(id ? { id: { not: id } } : {}),
+          status: { notIn: ["CANCELLED", "NO_SHOW", "COMPLETED"] },
+          scheduledAt: {
+            gte: new Date(start - 24 * 3600000),
+            lt: new Date(end),
+          },
+        },
+        select: { scheduledAt: true, durationMinutes: true },
       });
-      if (!existing) throw new ApiError(404, "Appointment not found.");
-      await client.appointmentLine.deleteMany({ where: { appointmentId: id } });
+      const clash = nearby.some(
+        (item) =>
+          item.scheduledAt.getTime() < end &&
+          item.scheduledAt.getTime() + item.durationMinutes * 60000 > start,
+      );
+      if (clash)
+        throw new ApiError(
+          409,
+          "This stylist already has an appointment at that time. Pick another time or stylist.",
+        );
+    }
+    const paidStatus = input.payment.status as string;
+    const amountPaid =
+      paidStatus === "Paid"
+        ? totalAmount
+        : paidStatus === "Partially Paid"
+          ? Math.min(toNumber(existing?.amountPaid ?? 0), totalAmount)
+          : 0;
+    if (existing) {
+      await client.appointmentLine.deleteMany({ where: { appointmentId: id! } });
       return client.appointment.update({
-        where: { id },
-        data: { ...data, lines: { create: lines } },
+        where: { id: id! },
+        data: { ...data, amountPaid, lines: { create: lines } },
         include: { customer: true, employee: true, lines: true },
       });
     }
     return client.appointment.create({
       data: {
         ...data,
+        amountPaid,
         salonId,
         appointmentNumber: await nextAppointmentNumber(client, salonId),
         lines: { create: lines },

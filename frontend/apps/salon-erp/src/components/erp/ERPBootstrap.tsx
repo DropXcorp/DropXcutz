@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { LoaderCircle, X } from "lucide-react";
 import { Toaster, toast } from "sonner";
-import { useERPStore, type ERPUser, type ERPSalon } from "@/src/lib/erp-store";
+import { useERPStore, type ERPUser, type ERPSalon, type ERPImpersonation } from "@/src/lib/erp-store";
+import ImpersonationBanner from "./ImpersonationBanner";
 const api = "/api";
 export default function ERPBootstrap({
   children,
@@ -52,7 +53,7 @@ export default function ERPBootstrap({
     fetch(`${api}/erp/auth/me`, { credentials: "include" })
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as {
-          data?: { user?: ERPUser; salon?: ERPSalon | null };
+          data?: { user?: ERPUser; salon?: ERPSalon | null; impersonation?: ERPImpersonation };
         } | null;
         const validSalonSession = Boolean(
           response.ok &&
@@ -61,7 +62,7 @@ export default function ERPBootstrap({
           body.data.user.role !== "PLATFORM_ADMIN",
         );
         if (validSalonSession && body?.data?.user && body.data.salon) {
-          setIdentity(body.data.user, body.data.salon);
+          setIdentity(body.data.user, body.data.salon, body.data.impersonation ?? null);
           setMustChangePassword(Boolean(body.data.user.mustChangePassword));
         }
         setSignedIn(validSalonSession);
@@ -124,7 +125,7 @@ export default function ERPBootstrap({
   if (!ready)
     return (
       <div
-        className="grid min-h-[60vh] place-items-center text-sm text-zinc-500"
+        className="grid min-h-[60vh] place-items-center text-sm text-muted-foreground"
         role="status"
       >
         <span className="flex items-center gap-2">
@@ -176,19 +177,19 @@ export default function ERPBootstrap({
   }
   if (mustChangePassword)
     return (
-      <div className="grid min-h-screen place-items-center bg-zinc-100 px-4 py-8">
+      <div className="grid min-h-screen place-items-center bg-muted/60 px-4 py-8">
         <form
           onSubmit={changePassword}
-          className="w-full max-w-md space-y-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-xl"
+          className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-xl"
         >
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
               First-time setup
             </p>
-            <h1 className="mt-2 text-3xl font-bold text-zinc-950">
+            <h1 className="mt-2 text-3xl font-bold text-foreground">
               Create your password
             </h1>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Your temporary password worked. Set a private password before
               entering the salon workspace.
             </p>
@@ -204,7 +205,7 @@ export default function ERPBootstrap({
               name="currentPassword"
               type="password"
               placeholder="Temporary password"
-              className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none focus:border-zinc-900"
+              className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-ring"
             />
             <input
               required
@@ -212,7 +213,7 @@ export default function ERPBootstrap({
               type="password"
               minLength={8}
               placeholder="New password (8+ characters)"
-              className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none focus:border-zinc-900"
+              className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-ring"
             />
             <input
               required
@@ -220,14 +221,14 @@ export default function ERPBootstrap({
               type="password"
               minLength={8}
               placeholder="Confirm new password"
-              className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none focus:border-zinc-900"
+              className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-ring"
             />
           </div>
           <button
             type="submit"
             aria-busy={authSubmitting}
             disabled={authSubmitting}
-            className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60"
+            className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60"
           >
             {authSubmitting ? "Saving…" : "Continue to ERP"}
           </button>
@@ -236,31 +237,31 @@ export default function ERPBootstrap({
     );
   if (!signedIn)
     return (
-      <main className="grid min-h-screen place-items-center bg-zinc-100 px-4 py-8">
+      <main className="grid min-h-screen place-items-center bg-muted/60 px-4 py-8">
         <motion.form
           onSubmit={login}
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-8 shadow-xl"
+          className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-xl"
         >
           <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-950 text-lg font-bold text-white">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-lg font-bold text-white">
               DX
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
                 DropXcutz ERP
               </p>
-              <p className="text-sm text-zinc-500">Salon workspace</p>
+              <p className="text-sm text-muted-foreground">Salon workspace</p>
             </div>
           </div>
           <div className="mt-10">
-            <p className="text-sm font-semibold text-zinc-500">Welcome back</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950">
+            <p className="text-sm font-semibold text-muted-foreground">Welcome back</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground">
               Sign in to your salon
             </h1>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Use the admin credentials provided by your platform administrator.
             </p>
           </div>
@@ -274,7 +275,7 @@ export default function ERPBootstrap({
           )}
           <div className="mt-6 space-y-4">
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-zinc-700">
+              <span className="mb-2 block text-sm font-semibold text-foreground/80">
                 Email address
               </span>
               <input
@@ -283,11 +284,11 @@ export default function ERPBootstrap({
                 type="email"
                 autoComplete="email"
                 placeholder="admin@example.com"
-                className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none transition focus:border-zinc-950 focus:ring-4 focus:ring-zinc-950/10"
+                className="w-full rounded-xl border border-border px-4 py-3 outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/10"
               />
             </label>
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-zinc-700">
+              <span className="mb-2 block text-sm font-semibold text-foreground/80">
                 Password
               </span>
               <input
@@ -296,14 +297,14 @@ export default function ERPBootstrap({
                 type="password"
                 autoComplete="current-password"
                 placeholder="Enter your password"
-                className="w-full rounded-xl border border-zinc-200 px-4 py-3 outline-none transition focus:border-zinc-950 focus:ring-4 focus:ring-zinc-950/10"
+                className="w-full rounded-xl border border-border px-4 py-3 outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/10"
               />
             </label>
             <button
               type="submit"
               aria-busy={authSubmitting}
               disabled={authSubmitting}
-              className="w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-60"
+              className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
             >
               {authSubmitting ? "Signing in…" : "Sign in to ERP"}
             </button>
@@ -314,6 +315,7 @@ export default function ERPBootstrap({
   return (
     <>
       <Toaster position="top-right" richColors closeButton duration={3500} />
+      <ImpersonationBanner />
       {error && (
         <div className="flex items-center justify-between bg-red-600 px-4 py-2 text-sm text-white shadow-sm">
           <div className="flex items-center gap-3">
@@ -349,7 +351,7 @@ export default function ERPBootstrap({
       )}
       {loading && !hydrated ? (
         <div
-          className="grid min-h-[60vh] place-items-center text-sm text-zinc-500"
+          className="grid min-h-[60vh] place-items-center text-sm text-muted-foreground"
           role="status"
         >
           <span className="flex items-center gap-2">

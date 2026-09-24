@@ -11,6 +11,7 @@ import {
   Printer,
   Copy,
   XCircle,
+  Ban,
   Trash2,
 } from "lucide-react";
 
@@ -28,6 +29,8 @@ interface AppointmentActionsProps {
   onPrint?: (appointment: AppointmentTableItem) => void;
   onDuplicate?: (appointment: AppointmentTableItem) => void;
   onCancel?: (appointment: AppointmentTableItem) => void;
+  onNoShow?: (appointment: AppointmentTableItem) => void;
+  busy?: boolean;
   onDelete?: (appointment: AppointmentTableItem) => void;
 }
 
@@ -42,8 +45,16 @@ export default function AppointmentActions({
   onPrint,
   onDuplicate,
   onCancel,
+  onNoShow,
+  busy = false,
   onDelete,
 }: AppointmentActionsProps) {
+  const status = appointment.status;
+  const canCheckIn = status === "Booked" || status === "Confirmed";
+  const canStart = status === "Checked In";
+  const canComplete = status === "In Progress";
+  const canCancel = status !== "Completed" && status !== "Cancelled" && status !== "No Show";
+  const canNoShow = status === "Booked" || status === "Confirmed";
   const [open, setOpen] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -83,22 +94,23 @@ export default function AppointmentActions({
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        disabled={busy}
         aria-label={`Actions for ${appointment.customer.name}`}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="rounded-xl p-2 transition hover:bg-slate-100"
+        className="rounded-xl p-2 transition hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-50"
       >
-        <MoreVertical className="h-5 w-5 text-slate-600" />
+        <MoreVertical className="h-5 w-5 text-foreground/70" />
       </button>
 
       {open && (
-        <div role="menu" className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-100 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">
+        <div role="menu" className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+          <div className="border-b border-border px-4 py-3">
+            <p className="text-sm font-semibold text-foreground">
               {appointment.customer.name}
             </p>
 
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               {appointment.appointment.appointmentNumber}
             </p>
           </div>
@@ -106,14 +118,15 @@ export default function AppointmentActions({
           {onView && <MenuItem icon={Eye} label="View Details" onClick={() => close(() => onView(appointment))} />}
           {onAssign && <MenuItem icon={UserCheck} label="Assign Stylist" onClick={() => close(() => onAssign(appointment))} />}
           {onEdit && <MenuItem icon={Pencil} label="Edit Appointment" onClick={() => close(() => onEdit(appointment))} />}
-          {onCheckIn && <MenuItem icon={UserCheck} label="Check In" onClick={() => close(() => onCheckIn(appointment))} />}
-          {onStart && <MenuItem icon={Play} label="Start Service" onClick={() => close(() => onStart(appointment))} />}
-          {onComplete && <MenuItem icon={CheckCircle2} label="Complete Appointment" onClick={() => close(() => onComplete(appointment))} />}
-          {(onPrint || onDuplicate) && <div className="my-1 border-t border-slate-100" />}
+          {onCheckIn && canCheckIn && <MenuItem icon={UserCheck} label="Check In" onClick={() => close(() => onCheckIn(appointment))} />}
+          {onStart && canStart && <MenuItem icon={Play} label="Start Service" onClick={() => close(() => onStart(appointment))} />}
+          {onComplete && canComplete && <MenuItem icon={CheckCircle2} label="Complete Appointment" onClick={() => close(() => onComplete(appointment))} />}
+          {(onPrint || onDuplicate) && <div className="my-1 border-t border-border" />}
           {onPrint && <MenuItem icon={Printer} label="Print Invoice" onClick={() => close(() => onPrint(appointment))} />}
           {onDuplicate && <MenuItem icon={Copy} label="Duplicate" onClick={() => close(() => onDuplicate(appointment))} />}
-          {(onCancel || onDelete) && <div className="my-1 border-t border-slate-100" />}
-          {onCancel && <MenuItem icon={XCircle} label="Cancel Appointment" danger onClick={() => close(() => onCancel(appointment))} />}
+          {((onCancel && canCancel) || (onNoShow && canNoShow) || onDelete) && <div className="my-1 border-t border-border" />}
+          {onNoShow && canNoShow && <MenuItem icon={Ban} label="Mark as No Show" onClick={() => close(() => onNoShow(appointment))} />}
+          {onCancel && canCancel && <MenuItem icon={XCircle} label="Cancel Appointment" danger onClick={() => close(() => onCancel(appointment))} />}
           {onDelete && <MenuItem icon={Trash2} label="Delete Appointment" danger onClick={() => close(() => onDelete(appointment))} />}
         </div>
       )}
@@ -143,7 +156,7 @@ function MenuItem({
         ${
           danger
             ? "text-red-600 hover:bg-red-50"
-            : "text-slate-700 hover:bg-slate-50"
+            : "text-foreground/80 hover:bg-muted/60"
         }`}
     >
       <Icon className="h-4 w-4" />

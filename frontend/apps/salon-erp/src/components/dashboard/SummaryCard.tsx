@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { LucideIcon, TrendingUp } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Card } from "@/components/ui/card";
 
 interface SummaryCardProps {
   title: string;
@@ -8,31 +9,21 @@ interface SummaryCardProps {
   icon: LucideIcon;
 }
 
-export default function SummaryCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-}: SummaryCardProps) {
+export default function SummaryCard({ title, value, subtitle, icon: Icon }: SummaryCardProps) {
   return (
-    <motion.div whileHover={{ y: -3 }} transition={{ type: "spring", stiffness: 320, damping: 24 }} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm font-medium text-zinc-500">{title}</p>
-
-          <h2 className="mt-3 text-3xl font-bold text-zinc-900">{value}</h2>
-
-          <div className="mt-4 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-green-600" />
-
-            <span className="text-sm text-zinc-500">{subtitle}</span>
+    <motion.div whileHover={{ y: -2 }} transition={{ type: "spring", stiffness: 320, damping: 26 }}>
+      <Card className="h-full gap-0 border-0 p-5 shadow-sm ring-1 ring-border transition-shadow hover:shadow-md">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <p className="mt-2 truncate text-2xl font-semibold tracking-tight tabular-nums text-foreground sm:text-3xl">{value}</p>
+            <p className="mt-2 truncate text-xs text-muted-foreground">{subtitle}</p>
+          </div>
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/5 text-primary">
+            <Icon className="size-5" />
           </div>
         </div>
-
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100">
-          <Icon className="h-6 w-6 text-zinc-700" />
-        </div>
-      </div>
+      </Card>
     </motion.div>
   );
 }

@@ -43,16 +43,18 @@ import {
   login,
   logout,
   me,
+  stopImpersonation,
 } from "../controllers/auth.controller";
 import { uploadFile } from "../controllers/upload.controller";
 import { notificationStream } from "../controllers/notification-stream.controller";
-import { getPaymentIntegration, savePaymentIntegration } from "../controllers/payment-integration.controller";
+import { disconnectPaymentIntegration, getPaymentIntegration, savePaymentIntegration, testPaymentIntegration, updatePaymentSettings } from "../controllers/payment-integration.controller";
 
 export const salonRouter = Router();
 salonRouter.post("/auth/login", login);
 salonRouter.post("/auth/logout", logout);
 salonRouter.use(requireAuthenticatedSalonUser);
 salonRouter.get("/auth/me", me);
+salonRouter.post("/auth/stop-impersonation", stopImpersonation);
 salonRouter.put("/auth/password", changePassword);
 salonRouter.get("/bootstrap", bootstrap);
 salonRouter.post("/customers", requireFeature("CUSTOMERS"), createCustomer);
@@ -123,6 +125,9 @@ salonRouter.delete("/payroll/:id", requireFeature("PAYROLL"), deletePayroll);
 salonRouter.put("/settings", requireSalonAdmin, updateSettings);
 salonRouter.get("/payment-integration", requireSalonAdmin, getPaymentIntegration);
 salonRouter.put("/payment-integration", requireSalonAdmin, savePaymentIntegration);
+salonRouter.post("/payment-integration/test", requireSalonAdmin, testPaymentIntegration);
+salonRouter.patch("/payment-integration/settings", requireSalonAdmin, updatePaymentSettings);
+salonRouter.delete("/payment-integration", requireSalonAdmin, disconnectPaymentIntegration);
 salonRouter.get("/notifications", listNotifications);
 salonRouter.get("/notifications/stream", notificationStream);
 salonRouter.patch("/notifications/:id/read", markNotificationRead);

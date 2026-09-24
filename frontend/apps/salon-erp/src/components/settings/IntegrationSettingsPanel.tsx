@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy, CreditCard, KeyRound, RefreshCw, Save } from "lucide-react";
+import { Copy, KeyRound, RefreshCw, Save } from "lucide-react";
 import { useERPStore } from "@/src/lib/erp-store";
-import { erpApi } from "@/src/lib/erp-store";
 import { Unavailable } from "./WebsiteSettingsPanel";
 
 const inputClass =
-  "w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900";
+  "w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm text-foreground outline-none transition focus:border-ring focus:ring-1 focus:ring-ring";
 const parseDomains = (value: string) =>
   value
     .split(/[\n,]/)
@@ -76,24 +75,24 @@ function IntegrationForm({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-12">
-      <header className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <header className="rounded-2xl border border-border bg-card p-6 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-950 text-white">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white">
             <KeyRound className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-zinc-950">
+            <h1 className="text-2xl font-bold text-foreground">
               Website integration
             </h1>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               Allow a custom website to use the public booking API safely.
             </p>
           </div>
         </div>
       </header>
-      <section className="space-y-5 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <section className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <label className="block space-y-2">
-          <span className="text-sm font-semibold text-zinc-800">
+          <span className="text-sm font-semibold text-foreground/80">
             Allowed domains
           </span>
           <textarea
@@ -103,19 +102,19 @@ function IntegrationForm({
             placeholder={"www.yoursalon.com\nbooking.yoursalon.com"}
             className={inputClass}
           />
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-muted-foreground">
             One domain per line. Include the port for local testing, for example
             localhost:3002.
           </span>
         </label>
         {integration && (
           <>
-            <div className="flex items-center justify-between gap-4 rounded-xl bg-zinc-50 p-4">
+            <div className="flex items-center justify-between gap-4 rounded-xl bg-muted/60 p-4">
               <div>
-                <p className="text-sm font-semibold text-zinc-900">
+                <p className="text-sm font-semibold text-foreground">
                   Integration status
                 </p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   Disable this to immediately block public API access.
                 </p>
               </div>
@@ -137,13 +136,13 @@ function IntegrationForm({
                 Public API key
               </p>
               <div className="mt-2 flex gap-2">
-                <code className="min-w-0 flex-1 break-all rounded-lg bg-white px-3 py-2 text-xs text-zinc-800">
+                <code className="min-w-0 flex-1 break-all rounded-lg bg-card px-3 py-2 text-xs text-foreground/80">
                   {integration.publicKey}
                 </code>
                 <button
                   type="button"
                   onClick={() => void copyKey()}
-                  className="rounded-lg border bg-white px-3 text-zinc-700 hover:bg-zinc-100"
+                  className="rounded-lg border bg-card px-3 text-foreground/80 hover:bg-muted/60"
                   title="Copy key"
                 >
                   <Copy className="h-4 w-4" />
@@ -160,7 +159,7 @@ function IntegrationForm({
           <button
             type="button"
             onClick={save}
-            className="inline-flex items-center gap-2 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary/90"
           >
             <Save className="h-4 w-4" />
             {integration ? "Save integration" : "Create integration key"}
@@ -169,7 +168,7 @@ function IntegrationForm({
             <button
               type="button"
               onClick={() => void rotateIntegrationKey(integration.id)}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground/80 hover:bg-muted/60"
             >
               <RefreshCw className="h-4 w-4" />
               Rotate key
@@ -177,56 +176,27 @@ function IntegrationForm({
           )}
         </div>
       </section>
-      <PaymentGatewaySettings />
+      <section className="space-y-3 rounded-2xl bg-card p-6 shadow-sm ring-1 ring-border">
+        <h2 className="text-lg font-semibold text-foreground">Quick start for developers</h2>
+        <p className="text-sm text-muted-foreground">
+          Build any website and call our booking API from the browser. Add your website&apos;s domain above (wildcards like <code>*.yoursalon.com</code> work), then publish it from the Website page.
+        </p>
+        <pre className="overflow-x-auto rounded-xl bg-zinc-950 p-4 text-xs leading-relaxed text-zinc-100">{`const API = "https://YOUR-API/api/v1/public";
+const headers = { "X-DropXcutz-Key": "dx_pub_…", "Content-Type": "application/json" };
+
+const services = await (await fetch(API + "/services", { headers })).json();
+const staff    = await (await fetch(API + "/employees?serviceId=" + serviceId, { headers })).json();
+const slots    = await (await fetch(API + "/availability?serviceId=…&employeeId=…&date=2026-10-01", { headers })).json();
+
+const booking = await (await fetch(API + "/appointments", {
+  method: "POST", headers,
+  body: JSON.stringify({ serviceId, employeeId, date, time, requestId: crypto.randomUUID(),
+                         customer: { name, phone, email } }),
+})).json();
+// booking.data = { id, appointmentNumber, manageToken, … }
+// Online payment: POST /appointments/:id/payment-order  (header X-Booking-Token: manageToken)
+//                 then Razorpay Checkout, then POST /appointments/:id/payment-verify`}</pre>
+      </section>
     </div>
-  );
-}
-
-export function PaymentGatewaySettings() {
-  const [keyId, setKeyId] = useState("");
-  const [keySecret, setKeySecret] = useState("");
-  const [webhookSecret, setWebhookSecret] = useState("");
-  const [configured, setConfigured] = useState(false);
-  const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    void erpApi<{ configured: boolean; keyId: string }>("/payment-integration")
-      .then((value) => {
-        setConfigured(value.configured);
-        setKeyId(value.keyId);
-      })
-      .catch((error: Error) => setMessage(error.message));
-  }, []);
-
-  const savePaymentGateway = async () => {
-    setMessage("");
-    try {
-      await erpApi("/payment-integration", {
-        method: "PUT",
-        body: JSON.stringify({ keyId, keySecret, webhookSecret }),
-      });
-      setKeySecret("");
-      setWebhookSecret("");
-      setConfigured(true);
-      setMessage("Razorpay is connected. Customer payments will settle directly to this salon.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not connect Razorpay.");
-    }
-  };
-
-  return (
-    <section className="space-y-5 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <div className="flex items-center gap-4">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-950 text-white"><CreditCard className="h-6 w-6" /></div>
-        <div><h2 className="text-lg font-bold text-zinc-950">Online payments</h2><p className="mt-1 text-sm text-zinc-500">Connect this salon&apos;s Razorpay account. Secrets are encrypted and never shown again.</p></div>
-      </div>
-      {configured && <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">Razorpay is connected. Enter all values again only to replace the connection.</p>}
-      {message && <p className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700">{message}</p>}
-      <label className="block space-y-2"><span className="text-sm font-semibold text-zinc-800">Razorpay Key ID</span><input value={keyId} onChange={(event) => setKeyId(event.target.value)} className={inputClass} placeholder="rzp_test_…" autoComplete="off" /></label>
-      <label className="block space-y-2"><span className="text-sm font-semibold text-zinc-800">Razorpay Key Secret</span><input value={keySecret} onChange={(event) => setKeySecret(event.target.value)} className={inputClass} type="password" placeholder="Enter the secret from Razorpay" autoComplete="new-password" /></label>
-      <label className="block space-y-2"><span className="text-sm font-semibold text-zinc-800">Webhook secret</span><input value={webhookSecret} onChange={(event) => setWebhookSecret(event.target.value)} className={inputClass} type="password" placeholder="Create this in Razorpay webhook settings" autoComplete="new-password" /></label>
-      <p className="text-xs text-zinc-500">In Razorpay, create a webhook pointing to <code>/api/webhooks/razorpay/salon</code> and subscribe to <code>payment.captured</code>.</p>
-      <button type="button" onClick={() => void savePaymentGateway()} disabled={!keyId || !keySecret || !webhookSecret} className="inline-flex items-center gap-2 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />Save Razorpay connection</button>
-    </section>
   );
 }

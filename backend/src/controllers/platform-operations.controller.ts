@@ -248,6 +248,31 @@ export async function runBulkSalonUpdate(request: Request, response: Response) {
               annualPrice: plan.annualPrice,
             },
           });
+        if (input.status === "ACTIVE") {
+          const hasLiveSubscription = await tx.subscription.findFirst({
+            where: { salonId, status: { in: ["ACTIVE", "TRIAL"] } },
+          });
+          if (!hasLiveSubscription) {
+            const lastSubscription = await tx.subscription.findFirst({
+              where: { salonId },
+              orderBy: { createdAt: "desc" },
+            });
+            const fallbackPlanId = plan?.id ?? lastSubscription?.planId;
+            if (!fallbackPlanId)
+              throw new ApiError(409, "Assign a subscription plan before activating this salon.");
+            await tx.subscription.create({
+              data: {
+                salonId,
+                planId: fallbackPlanId,
+                status: "ACTIVE",
+                billingCycle: lastSubscription?.billingCycle ?? null,
+                monthlyPrice: plan?.monthlyPrice ?? lastSubscription?.monthlyPrice ?? null,
+                annualPrice: plan?.annualPrice ?? lastSubscription?.annualPrice ?? null,
+                expiresAt: null,
+              },
+            });
+          }
+        }
         await tx.platformBulkOperationItem.updateMany({
           where: { operationId: operation.id, salonId },
           data: { status: "COMPLETED" },

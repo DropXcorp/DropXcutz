@@ -1,12 +1,42 @@
+import { randomBytes } from "node:crypto";
 import type { Request, Response } from "express";
 import { prisma } from "../config/prisma";
 import { ApiError } from "../middleware/error.middleware";
 import { publicBookingInput } from "../validators/public-booking.validator";
 import { hasFeature } from "../services/feature.service";
+import { salonNow, wallTime } from "../utils/salon-time";
 
 const activeAppointment = {
   status: { notIn: ["CANCELLED", "NO_SHOW"] as ("CANCELLED" | "NO_SHOW")[] },
 };
+
+/** Unpaid online bookings only hold their slot until holdExpiresAt. */
+const notExpiredHold = () => ({
+  OR: [
+    { holdExpiresAt: null },
+    { holdExpiresAt: { gt: new Date() } },
+    { paymentStatus: { not: "PENDING" as const } },
+  ],
+});
+
+const MIN_LEAD_MINUTES = 15;
+const holdMinutes = () => Math.min(Math.max(Number(process.env.BOOKING_HOLD_MINUTES ?? 15) || 15, 5), 120);
+
+/** Booking-window and staff-leave rules shared by availability and booking creation. */
+async function dayBlockedReason(salonId: string, employeeId: string, date: string, timezone: string) {
+  const settings = await prisma.salonSettings.findUnique({ where: { salonId }, select: { bookingWindowDays: true } });
+  const windowDays = settings?.bookingWindowDays ?? 30;
+  const dayStart = atSalonTime(date, "00:00", timezone).getTime();
+  if (dayStart > salonNow(timezone) + windowDays * 86_400_000)
+    return `Bookings open up to ${windowDays} days ahead.`;
+  const day = new Date(`${date}T00:00:00.000Z`);
+  const leave = await prisma.leaveRequest.findFirst({
+    where: { employeeId, status: "APPROVED", startDate: { lte: day }, endDate: { gte: day } },
+    select: { id: true },
+  });
+  if (leave) return "This specialist is on leave that day.";
+  return null;
+}
 
 function minutes(value: string) {
   const [hour, minute] = value.split(":").map(Number);
@@ -30,44 +60,11 @@ function nextDate(value: string) {
   return date.toISOString().slice(0, 10);
 }
 
-/** Converts a salon-local wall-clock date and time to its actual UTC instant. */
-function atSalonTime(date: string, time: string, timezone: string) {
+/** Salon wall-clock date+time in the ERP's wall-clock-as-UTC storage convention (see utils/salon-time.ts). */
+function atSalonTime(date: string, time: string, _timezone: string) {
   assertDate(date);
-  const total = minutes(time);
-  const year = Number(date.slice(0, 4));
-  const month = Number(date.slice(5, 7));
-  const day = Number(date.slice(8, 10));
-  const hour = Math.floor(total / 60);
-  const minute = total % 60;
-  const wallClock = Date.UTC(year, month - 1, day, hour, minute);
-  let formatter: Intl.DateTimeFormat;
-  try {
-    formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    });
-  } catch {
-    throw new ApiError(500, "The salon timezone is invalid.");
-  }
-  const parts = Object.fromEntries(
-    formatter
-      .formatToParts(new Date(wallClock))
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, part.value]),
-  );
-  const displayedAsUtc = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    Number(parts.hour),
-    Number(parts.minute),
-  );
-  return new Date(wallClock - (displayedAsUtc - wallClock));
+  minutes(time);
+  return wallTime(date, time);
 }
 
 function durationEnd(
@@ -91,7 +88,9 @@ export async function salonForPublic(response: Response) {
       403,
       "Online booking is not included in this subscription.",
     );
-  return salon;
+  // allowOnlinePayments lives on SalonSettings (not Salon); default is on when the salon has no settings row.
+  const settings = await prisma.salonSettings.findUnique({ where: { salonId: salon.id }, select: { allowOnlinePayments: true } });
+  return { ...salon, allowOnlinePayments: settings?.allowOnlinePayments ?? true } as typeof salon & { allowOnlinePayments: boolean };
 }
 
 export async function publicSalon(request: Request, response: Response) {
@@ -178,6 +177,11 @@ export async function publicAvailability(request: Request, response: Response) {
       400,
       "The selected service or specialist is unavailable.",
     );
+  const blocked = await dayBlockedReason(salon.id, employee.id, date, salon.timezone);
+  if (blocked) {
+    response.json({ data: { date, slots: [], reason: blocked } });
+    return;
+  }
   const start = atSalonTime(date, "00:00", salon.timezone);
   const end = atSalonTime(nextDate(date), "00:00", salon.timezone);
   const booked = await prisma.appointment.findMany({
@@ -186,6 +190,7 @@ export async function publicAvailability(request: Request, response: Response) {
       employeeId,
       scheduledAt: { gte: start, lt: end },
       ...activeAppointment,
+      ...notExpiredHold(),
     },
     select: { scheduledAt: true, durationMinutes: true },
   });
@@ -201,6 +206,7 @@ export async function publicAvailability(request: Request, response: Response) {
     const time = `${String(Math.floor(slot / 60)).padStart(2, "0")}:${String(slot % 60).padStart(2, "0")}`;
     const slotStart = atSalonTime(date, time, salon.timezone).getTime();
     const slotEnd = slotStart + service.durationMinutes * 60_000;
+    if (slotStart < salonNow(salon.timezone) + MIN_LEAD_MINUTES * 60_000) continue;
     if (
       !booked.some(
         (item) =>
@@ -221,8 +227,10 @@ export async function createPublicBooking(
   const input = publicBookingInput.parse(request.body);
   const salon = await salonForPublic(response);
   const scheduledAt = atSalonTime(input.date, input.time, salon.timezone);
-  if (scheduledAt <= new Date())
+  if (scheduledAt.getTime() <= salonNow(salon.timezone))
     throw new ApiError(400, "Please select a future appointment time.");
+  const blocked = await dayBlockedReason(salon.id, input.employeeId, input.date, salon.timezone);
+  if (blocked) throw new ApiError(400, blocked);
   const requestedMinutes = minutes(input.time);
   if (
     requestedMinutes < minutes(salon.openingTime) ||
@@ -232,7 +240,8 @@ export async function createPublicBooking(
       400,
       "The selected time is outside salon working hours.",
     );
-  const booking = await prisma.$transaction(
+  const onlinePayable = Boolean(salon.allowOnlinePayments && salon.razorpayKeyId && salon.razorpayKeySecretCipher);
+  const runBooking = () => prisma.$transaction(
     async (client) => {
       if (input.requestId) {
         const existing = await client.appointment.findFirst({
@@ -271,6 +280,7 @@ export async function createPublicBooking(
           employeeId: employee.id,
           scheduledAt: { gte: dayStart, lt: dayEnd },
           ...activeAppointment,
+          ...notExpiredHold(),
         },
         select: { scheduledAt: true, durationMinutes: true },
       });
@@ -328,6 +338,8 @@ export async function createPublicBooking(
           employeeId: employee.id,
           source: "WEBSITE",
           websiteRequestId: input.requestId,
+          manageToken: randomBytes(24).toString("base64url"),
+          holdExpiresAt: onlinePayable ? new Date(Date.now() + holdMinutes() * 60_000) : null,
           scheduledAt,
           durationMinutes: service.durationMinutes,
           subtotal: service.price,
@@ -362,6 +374,20 @@ export async function createPublicBooking(
     },
     { isolationLevel: "Serializable" },
   );
+  let booking: Awaited<ReturnType<typeof runBooking>> | undefined;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      booking = await runBooking();
+      break;
+    } catch (error) {
+      if ((error as { code?: string }).code !== "P2034" || attempt === 3) {
+        if ((error as { code?: string }).code === "P2034")
+          throw new ApiError(409, "That time was just booked. Please select another slot.");
+        throw error;
+      }
+    }
+  }
+  if (!booking) throw new ApiError(503, "Booking could not be completed. Please try again.");
   response.status(201).json({
     data: {
       id: booking.id,
@@ -369,6 +395,8 @@ export async function createPublicBooking(
       status: booking.status,
       scheduledAt: booking.scheduledAt,
       customer: booking.customer.name,
+      manageToken: booking.manageToken,
+      holdExpiresAt: booking.holdExpiresAt,
     },
   });
 }

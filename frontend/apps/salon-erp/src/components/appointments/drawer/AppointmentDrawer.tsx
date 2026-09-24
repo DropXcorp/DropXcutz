@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  CalendarCheck2,
-  Save,
-  X,
-  User,
-  Phone,
-  Scissors,
-  Trash2,
-  Percent,
   Award,
+  CalendarCheck2,
+  Check,
+  Clock,
+  Percent,
+  Phone,
+  Plus,
+  Save,
+  Scissors,
+  Search,
+  User,
+  X,
 } from "lucide-react";
 
 import { AppointmentTableItem } from "@/src/components/appointments/AppointmentTable";
@@ -23,6 +27,7 @@ interface AppointmentDrawerProps {
   onSave: (data: AppointmentFormData) => Promise<void> | void;
   availableServices?: ServiceItem[];
   availableEmployees?: EmployeeItem[];
+  availableCustomers?: CustomerItem[];
 }
 
 export interface ServiceItem {
@@ -37,6 +42,12 @@ export interface EmployeeItem {
   name: string;
   role?: string;
   active?: boolean;
+}
+
+export interface CustomerItem {
+  id: string;
+  name: string;
+  phone: string;
 }
 
 export interface AppointmentFormData {
@@ -55,6 +66,14 @@ export interface AppointmentFormData {
 }
 
 const DEFAULT_SERVICES: ServiceItem[] = [];
+const DEFAULT_EMPLOYEES: EmployeeItem[] = [];
+const DEFAULT_CUSTOMERS: CustomerItem[] = [];
+const money = (value: number) => `₹${Math.round(value).toLocaleString("en-IN")}`;
+
+const localToday = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
 
 export default function AppointmentDrawer({
   open,
@@ -63,7 +82,8 @@ export default function AppointmentDrawer({
   onClose,
   onSave,
   availableServices = DEFAULT_SERVICES,
-  availableEmployees = [],
+  availableEmployees = DEFAULT_EMPLOYEES,
+  availableCustomers = DEFAULT_CUSTOMERS,
 }: AppointmentDrawerProps) {
   useEffect(() => {
     if (!open) return;
@@ -74,9 +94,9 @@ export default function AppointmentDrawer({
     };
   }, [open]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <AppointmentForm
       key={`${mode}-${appointment?.id ?? "new"}`}
       mode={mode}
@@ -85,9 +105,15 @@ export default function AppointmentDrawer({
       onSave={onSave}
       availableServices={availableServices}
       availableEmployees={availableEmployees}
-    />
+      availableCustomers={availableCustomers}
+    />,
+    document.body,
   );
 }
+
+const fieldClass =
+  "h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground shadow-xs outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-3 focus:ring-ring/30 disabled:opacity-60";
+const labelClass = "mb-1.5 block text-xs font-semibold text-foreground/80";
 
 function AppointmentForm({
   mode,
@@ -95,343 +121,484 @@ function AppointmentForm({
   onClose,
   onSave,
   availableServices = DEFAULT_SERVICES,
-  availableEmployees = [],
+  availableEmployees = DEFAULT_EMPLOYEES,
+  availableCustomers = DEFAULT_CUSTOMERS,
 }: Omit<AppointmentDrawerProps, "open">) {
   const [saving, setSaving] = useState(false);
+  const [pricingTouched, setPricingTouched] = useState(false);
+  const [serviceQuery, setServiceQuery] = useState("");
   const [formData, setFormData] = useState<AppointmentFormData>(() => {
-    const services = appointment?.services.map((service) => {
-      const knownService = availableServices.find((item) => item.id === service.id || item.name === service.name);
-      return knownService ?? { id: service.id, name: service.name, price: 500, durationMinutes: 30 };
-    }) ?? [];
-
+    const services =
+      appointment?.services.map((service) => {
+        const known = availableServices.find(
+          (item) => item.id === service.id || item.name === service.name,
+        );
+        return known ?? { id: service.id, name: service.name, price: 0, durationMinutes: 30 };
+      }) ?? [];
     return {
-    customerName: "",
-    customerPhone: "",
-    date: new Date().toISOString().split("T")[0],
-    time: "10:00",
-    services: [],
-    stylistId: appointment?.stylist.id ?? availableEmployees.find((employee) => employee.active)?.id ?? "unassigned",
-    applyDiscount: false,
-    applyLoyaltyPoints: false,
-    subtotal: 0,
-    discountAmount: 0,
-    loyaltyAmount: 0,
+      customerName: appointment?.customer.name ?? "",
+      customerPhone: appointment?.customer.phone ?? "",
+      date: appointment ? toInputDate(appointment.schedule.date) : localToday(),
+      time: appointment ? toInputTime(appointment.schedule.time) : "10:00",
+      services,
+      stylistId: appointment?.stylist.id ?? "unassigned",
+      applyDiscount: false,
+      applyLoyaltyPoints: false,
+      subtotal: 0,
+      discountAmount: 0,
+      loyaltyAmount: 0,
       totalAmount: 0,
-      ...(appointment
-        ? {
-            customerName: appointment.customer.name,
-            customerPhone: appointment.customer.phone ?? "",
-            date: toInputDate(appointment.schedule.date),
-            time: toInputTime(appointment.schedule.time),
-            services,
-            stylistId: appointment.stylist.id,
-          }
-        : {}),
     };
   });
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose, saving]);
+
   const subtotal = formData.services.reduce((sum, service) => sum + service.price, 0);
+  const totalMinutes = formData.services.reduce((sum, service) => sum + service.durationMinutes, 0);
   const discountAmount = formData.applyDiscount ? Math.round(subtotal * 0.1) : 0;
   const loyaltyAmount = formData.applyLoyaltyPoints ? Math.round(subtotal * 0.1) : 0;
-  const totalAmount = Math.max(0, subtotal - discountAmount - loyaltyAmount);
+  const calculatedTotal = Math.max(0, subtotal - discountAmount - loyaltyAmount);
+  const totalAmount = appointment && !pricingTouched ? appointment.payment.amount : calculatedTotal;
 
-  const handleAddService = (serviceId: string) => {
-    const serviceToAdd = availableServices.find((s) => s.id === serviceId);
-    if (serviceToAdd && !formData.services.some((s) => s.id === serviceId)) {
-      setFormData((prev) => ({
-        ...prev,
-        services: [...prev.services, serviceToAdd],
-      }));
-    }
+  const unavailableServices =
+    availableServices.length > 0
+      ? formData.services.filter((service) => !availableServices.some((item) => item.id === service.id))
+      : [];
+
+  const selectableServices = useMemo(() => {
+    const query = serviceQuery.trim().toLowerCase();
+    return availableServices.filter(
+      (service) =>
+        !formData.services.some((selected) => selected.id === service.id) &&
+        (!query || service.name.toLowerCase().includes(query)),
+    );
+  }, [availableServices, formData.services, serviceQuery]);
+
+  const endTime = useMemo(() => {
+    const [h, m] = formData.time.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m) || totalMinutes === 0) return "";
+    const end = h * 60 + m + totalMinutes;
+    const hh = Math.floor(end / 60) % 24;
+    const mm = end % 60;
+    return new Date(2000, 0, 1, hh, mm).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  }, [formData.time, totalMinutes]);
+
+  const addService = (service: ServiceItem) => {
+    setPricingTouched(true);
+    setFormData((prev) => ({ ...prev, services: [...prev.services, service] }));
+  };
+  const removeService = (serviceId: string) => {
+    setPricingTouched(true);
+    setFormData((prev) => ({ ...prev, services: prev.services.filter((s) => s.id !== serviceId) }));
   };
 
-  const handleRemoveService = (serviceId: string) => {
+  const setName = (customerName: string) => {
+    const match = availableCustomers.find(
+      (customer) => customer.name.toLowerCase() === customerName.trim().toLowerCase(),
+    );
     setFormData((prev) => ({
       ...prev,
-      services: prev.services.filter((s) => s.id !== serviceId),
+      customerName,
+      customerPhone: match && !prev.customerPhone ? match.phone : prev.customerPhone,
+    }));
+  };
+  const setPhone = (customerPhone: string) => {
+    const digits = customerPhone.replace(/\s+/g, "");
+    const match =
+      digits.length >= 8
+        ? availableCustomers.find((customer) => customer.phone.replace(/\s+/g, "") === digits)
+        : undefined;
+    setFormData((prev) => ({
+      ...prev,
+      customerPhone,
+      customerName: match && !prev.customerName ? match.name : prev.customerName,
     }));
   };
 
+  const canSubmit = formData.services.length > 0 && unavailableServices.length === 0 && !saving;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving) return;
+    if (!canSubmit) return;
     setSaving(true);
     try {
       await onSave({ ...formData, subtotal, discountAmount, loyaltyAmount, totalAmount });
+    } catch {
+      // The caller reports the failure; keep the form open with the entered data.
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <>
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-100" role="presentation">
       <div
-        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
+        className="erp-fade-in absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={() => !saving && onClose()}
       />
-
-      {/* Drawer Container with Fixed Max Height */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
-        <form
-          onSubmit={handleSubmit}
-          className="flex h-[90vh] max-h-[700px] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-6 py-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-900">
-                <CalendarCheck2 className="h-5 w-5" />
-              </div>
-              <h2 className="text-xl font-bold text-zinc-900">
-                {mode === "create" ? "New Appointment" : "Edit Appointment"}
-              </h2>
+      <form
+        onSubmit={handleSubmit}
+        role="dialog"
+        aria-modal="true"
+        aria-label={mode === "create" ? "New appointment" : "Edit appointment"}
+        className="erp-slide-in absolute inset-y-0 right-0 flex w-full max-w-xl flex-col bg-card shadow-2xl ring-1 ring-border"
+      >
+        {/* Header */}
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+              <CalendarCheck2 className="size-5" />
             </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-semibold text-foreground">
+                {mode === "create" ? "New appointment" : "Edit appointment"}
+              </h2>
+              <p className="truncate text-xs text-muted-foreground">
+                {mode === "edit" && appointment?.appointment.appointmentNumber
+                  ? appointment.appointment.appointmentNumber
+                  : "Book a walk-in or phone appointment"}
+              </p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Close"
+            className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            <X className="size-5" />
+          </button>
+        </header>
 
-          {/* Form Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
-            {/* Customer Details */}
-            <div className="grid gap-4 sm:grid-cols-2">
+        {/* Body */}
+        <div className="flex-1 space-y-7 overflow-y-auto px-5 py-6 sm:px-6">
+          {/* Customer */}
+          <section className="space-y-3">
+            <SectionTitle icon={User} title="Client" />
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-zinc-700">
-                  Client Name *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter full name"
-                    value={formData.customerName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, customerName: e.target.value })
-                    }
-                    className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 pl-10 pr-4 text-sm text-zinc-900 outline-none transition focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
-                  />
-                </div>
+                <label className={labelClass} htmlFor="apt-name">Full name *</label>
+                <input
+                  id="apt-name"
+                  required
+                  list="apt-customers"
+                  autoComplete="off"
+                  placeholder="e.g. Priya Sharma"
+                  value={formData.customerName}
+                  onChange={(e) => setName(e.target.value)}
+                  className={fieldClass}
+                />
+                <datalist id="apt-customers">
+                  {availableCustomers.slice(0, 200).map((customer) => (
+                    <option key={customer.id} value={customer.name} />
+                  ))}
+                </datalist>
               </div>
-
               <div>
-                <label className="mb-1 block text-xs font-semibold text-zinc-700">
-                  Phone Number *
-                </label>
+                <label className={labelClass} htmlFor="apt-phone">Phone *</label>
                 <div className="relative">
-                  <Phone className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
+                  <Phone className="pointer-events-none absolute left-3 top-3.5 size-4 text-muted-foreground" />
                   <input
-                    type="tel"
+                    id="apt-phone"
                     required
+                    type="tel"
+                    inputMode="tel"
+                    minLength={5}
                     placeholder="+91 98765 43210"
                     value={formData.customerPhone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, customerPhone: e.target.value })
-                    }
-                    className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 pl-10 pr-4 text-sm text-zinc-900 outline-none transition focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+                    onChange={(e) => setPhone(e.target.value)}
+                    className={`${fieldClass} pl-9`}
                   />
                 </div>
               </div>
             </div>
+          </section>
 
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-700">Assigned Stylist</label>
-              <select
-                value={formData.stylistId}
-                onChange={(e) => setFormData({ ...formData, stylistId: e.target.value })}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-900"
-              >
-                <option value="unassigned">Unassigned</option>
-                {availableEmployees.filter((employee) => employee.active !== false).map((employee) => (
-                  <option key={employee.id} value={employee.id}>{employee.name}{employee.role ? ` (${employee.role})` : ""}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Services Selection Section */}
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-xs font-semibold text-zinc-700 uppercase tracking-wider">
-                  <Scissors className="h-4 w-4 text-zinc-500" /> Services *
-                </label>
-                <select
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleAddService(e.target.value);
-                      e.target.value = "";
-                    }
-                  }}
-                  className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 outline-none hover:bg-zinc-100"
-                >
-                  <option value="">+ Add Service</option>
-                  {availableServices.filter(
-                    (s) => !formData.services.some((selected) => selected.id === s.id)
-                  ).map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} (₹{service.price})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Scrollable Service List Container */}
-              <div className="max-h-48 overflow-y-auto pr-1 space-y-2 scrollbar-thin scrollbar-thumb-zinc-300 scrollbar-track-transparent">
-                {formData.services.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-zinc-400">
-                    No services selected. Please select at least one.
-                  </p>
-                ) : (
-                  formData.services.map((service) => (
-                    <div
+          {/* Services */}
+          <section className="space-y-3">
+            <SectionTitle icon={Scissors} title="Services" hint="Select at least one" />
+            {formData.services.length > 0 && (
+              <ul className="space-y-2">
+                {formData.services.map((service) => {
+                  const missing = unavailableServices.some((item) => item.id === service.id);
+                  return (
+                    <li
                       key={service.id}
-                      className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-3 text-sm shadow-sm"
+                      className={`flex items-center justify-between gap-3 rounded-xl border p-3 ${
+                        missing ? "border-red-200 bg-red-50" : "border-border bg-muted/40"
+                      }`}
                     >
-                      <span className="font-medium text-zinc-800">{service.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold text-zinc-900">₹{service.price}</span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{service.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {missing ? "No longer offered — remove to continue" : `${service.durationMinutes} mins`}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-sm font-semibold tabular-nums text-foreground">{money(service.price)}</span>
                         <button
                           type="button"
-                          onClick={() => handleRemoveService(service.id)}
-                          className="text-zinc-400 transition hover:text-red-500"
+                          aria-label={`Remove ${service.name}`}
+                          onClick={() => removeService(service.id)}
+                          className="rounded-md p-1 text-muted-foreground transition hover:bg-red-100 hover:text-red-600"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <X className="size-4" />
                         </button>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
-            {/* Schedule (Date & Time) */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-dashed border-border p-3">
+              {availableServices.length === 0 ? (
+                <p className="py-2 text-center text-xs text-muted-foreground">
+                  No services in your catalogue yet. Add services first from the Services page.
+                </p>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+                    <input
+                      type="search"
+                      value={serviceQuery}
+                      onChange={(e) => setServiceQuery(e.target.value)}
+                      placeholder="Search services to add…"
+                      aria-label="Search services"
+                      className="h-10 w-full rounded-lg border border-input bg-card pl-9 pr-3 text-sm outline-none transition focus:border-ring focus:ring-3 focus:ring-ring/30"
+                    />
+                  </div>
+                  <div className="mt-3 grid max-h-44 gap-2 overflow-y-auto sm:grid-cols-2">
+                    {selectableServices.length === 0 ? (
+                      <p className="col-span-full py-3 text-center text-xs text-muted-foreground">
+                        {serviceQuery ? "No matching services." : "All services added."}
+                      </p>
+                    ) : (
+                      selectableServices.map((service) => (
+                        <button
+                          key={service.id}
+                          type="button"
+                          onClick={() => addService(service)}
+                          className="group flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-left transition hover:border-primary/40 hover:bg-muted/50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-foreground">{service.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {money(service.price)} · {service.durationMinutes}m
+                            </span>
+                          </span>
+                          <Plus className="size-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* Schedule */}
+          <section className="space-y-3">
+            <SectionTitle icon={Clock} title="Schedule & stylist" />
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-zinc-700">
-                  Date *
-                </label>
+                <label className={labelClass} htmlFor="apt-date">Date *</label>
                 <input
+                  id="apt-date"
                   type="date"
                   required
                   value={formData.date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-900"
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className={fieldClass}
                 />
               </div>
-
               <div>
-                <label className="mb-1 block text-xs font-semibold text-zinc-700">
-                  Time *
-                </label>
+                <label className={labelClass} htmlFor="apt-time">Time *</label>
                 <input
+                  id="apt-time"
                   type="time"
                   required
                   value={formData.time}
-                  onChange={(e) =>
-                    setFormData({ ...formData, time: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-900"
+                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                  className={fieldClass}
                 />
               </div>
             </div>
-
-            {/* Discounts & Loyalty Points */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3 transition hover:bg-zinc-100">
-                <div className="flex items-center gap-2.5">
-                  <Percent className="h-4 w-4 text-emerald-600" />
-                  <span className="text-xs font-semibold text-zinc-800">10% Discount</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={formData.applyDiscount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, applyDiscount: e.target.checked })
-                  }
-                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
-                />
-              </label>
-
-              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3 transition hover:bg-zinc-100">
-                <div className="flex items-center gap-2.5">
-                  <Award className="h-4 w-4 text-amber-500" />
-                  <span className="text-xs font-semibold text-zinc-800">10% Loyalty Points</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={formData.applyLoyaltyPoints}
-                  onChange={(e) =>
-                    setFormData({ ...formData, applyLoyaltyPoints: e.target.checked })
-                  }
-                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
-                />
-              </label>
+            {totalMinutes > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Duration {totalMinutes} mins{endTime ? ` · ends around ${endTime}` : ""}
+              </p>
+            )}
+            <div>
+              <label className={labelClass} htmlFor="apt-stylist">Stylist</label>
+              <select
+                id="apt-stylist"
+                value={formData.stylistId}
+                onChange={(e) => setFormData({ ...formData, stylistId: e.target.value })}
+                className={fieldClass}
+              >
+                <option value="unassigned">Unassigned</option>
+                {availableEmployees
+                  .filter((employee) => employee.active !== false)
+                  .map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name}
+                      {employee.role ? ` — ${employee.role}` : ""}
+                    </option>
+                  ))}
+              </select>
             </div>
+          </section>
 
-            {/* Total Amount & Price Breakdown */}
-            <div className="rounded-2xl bg-zinc-900 p-4 text-white space-y-2">
-              <div className="flex justify-between text-xs text-zinc-400">
-                <span>Subtotal</span>
-                <span className="font-medium text-zinc-200">₹{subtotal}</span>
+          {/* Pricing */}
+          <section className="space-y-3">
+            <SectionTitle icon={Percent} title="Pricing" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <ToggleRow
+                icon={Percent}
+                iconClass="text-emerald-600"
+                label="10% discount"
+                checked={formData.applyDiscount}
+                onChange={(checked) => {
+                  setPricingTouched(true);
+                  setFormData({ ...formData, applyDiscount: checked });
+                }}
+              />
+              <ToggleRow
+                icon={Award}
+                iconClass="text-amber-500"
+                label="10% loyalty points"
+                checked={formData.applyLoyaltyPoints}
+                onChange={(checked) => {
+                  setPricingTouched(true);
+                  setFormData({ ...formData, applyLoyaltyPoints: checked });
+                }}
+              />
+            </div>
+            <dl className="space-y-1.5 rounded-xl bg-muted/50 p-4 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <dt>Subtotal</dt>
+                <dd className="tabular-nums">{money(subtotal)}</dd>
               </div>
-
               {formData.applyDiscount && (
-                <div className="flex justify-between text-xs text-emerald-400">
-                  <span>Discount (10%)</span>
-                  <span>-₹{discountAmount}</span>
+                <div className="flex justify-between text-emerald-700">
+                  <dt>Discount (10%)</dt>
+                  <dd className="tabular-nums">−{money(discountAmount)}</dd>
                 </div>
               )}
-
               {formData.applyLoyaltyPoints && (
-                <div className="flex justify-between text-xs text-amber-400">
-                  <span>Loyalty Points (10%)</span>
-                  <span>-₹{loyaltyAmount}</span>
+                <div className="flex justify-between text-amber-700">
+                  <dt>Loyalty points (10%)</dt>
+                  <dd className="tabular-nums">−{money(loyaltyAmount)}</dd>
                 </div>
               )}
-
-              <div className="flex items-center justify-between border-t border-zinc-800 pt-2 text-sm font-medium">
-                <span className="text-zinc-300">Final Amount</span>
-                <span className="text-2xl font-bold text-white">₹{totalAmount}</span>
+              <div className="flex items-baseline justify-between border-t border-border pt-2">
+                <dt className="font-semibold text-foreground">Total</dt>
+                <dd className="text-xl font-semibold tabular-nums text-foreground">{money(totalAmount)}</dd>
               </div>
-            </div>
-          </div>
+            </dl>
+          </section>
+        </div>
 
-          {/* Footer Actions */}
-          <div className="flex shrink-0 items-center justify-end gap-3 border-t border-zinc-200 bg-white px-6 py-4">
+        {/* Footer */}
+        <footer className="flex shrink-0 items-center justify-between gap-3 border-t bg-card px-5 py-4 sm:px-6">
+          <div className="hidden min-w-0 sm:block">
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-lg font-semibold tabular-nums text-foreground">{money(totalAmount)}</p>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
+              disabled={saving}
+              className="h-10 rounded-lg border border-border px-4 text-sm font-medium text-foreground/80 transition hover:bg-muted disabled:opacity-50"
             >
               Cancel
             </button>
-
             <button
               type="submit"
-              disabled={formData.services.length === 0 || saving}
-              className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50"
+              disabled={!canSubmit}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-xs transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Save className={`h-4 w-4 ${saving ? "animate-pulse" : ""}`} />
-              {saving ? "Saving..." : mode === "create" ? "Create Appointment" : "Save Changes"}
+              {saving ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+              ) : mode === "create" ? (
+                <Check className="size-4" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              {saving ? "Saving…" : mode === "create" ? "Book appointment" : "Save changes"}
             </button>
           </div>
-        </form>
-      </div>
-    </>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function SectionTitle({
+  icon: Icon,
+  title,
+  hint,
+}: {
+  icon: React.ElementType;
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 border-b pb-2">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Icon className="size-4 text-muted-foreground" />
+        {title}
+      </h3>
+      {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+    </div>
+  );
+}
+
+function ToggleRow({
+  icon: Icon,
+  iconClass,
+  label,
+  checked,
+  onChange,
+}: {
+  icon: React.ElementType;
+  iconClass: string;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 transition hover:bg-muted/40">
+      <span className="flex items-center gap-2.5 text-sm font-medium text-foreground/80">
+        <Icon className={`size-4 ${iconClass}`} />
+        {label}
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-4 rounded border-border accent-primary"
+      />
+    </label>
   );
 }
 
 function toInputDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? new Date().toISOString().split("T")[0] : parsed.toISOString().split("T")[0];
+  return Number.isNaN(parsed.getTime())
+    ? localToday()
+    : `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
 }
 
 function toInputTime(value: string) {

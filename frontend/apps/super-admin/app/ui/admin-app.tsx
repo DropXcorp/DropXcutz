@@ -1,7 +1,9 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 import {
   BarChart3,
   Bell,
@@ -13,6 +15,7 @@ import {
   Menu,
   Plus,
   Settings,
+  ShieldAlert,
   Users,
   X,
 } from "lucide-react";
@@ -20,19 +23,24 @@ import {
   AuditView,
   Brand,
   buttonClass,
+  inputClass,
+  ConfirmDialog,
   CreateSalonModal,
   CreateUserModal,
   EditSalonModal,
   ExtendTrialModal,
   FullPageLoader,
+  ModalOverlay,
+  outlineButtonClass,
   Navigation,
-  Notice,
   NotificationView,
   Overview,
   ResetPasswordModal,
   SalonDetailsModal,
   SalonsView,
   SectionHeading,
+  SessionsView,
+  WebsitesView,
   SettingsView,
   SidebarFooter,
   SignIn,
@@ -45,6 +53,9 @@ import RequestFeedback from "./RequestFeedback";
 import type {
   AuditItem,
   OverviewData,
+  PlatformSession,
+  PlatformWebsite,
+  SystemCheck,
   PlatformUser,
   Salon,
   Section,
@@ -69,15 +80,9 @@ type SalonSubscription = {
   id: string;
   planId: string;
   status: "TRIAL" | "ACTIVE" | "EXPIRED" | "SUSPENDED" | "CANCELLED";
+  billingCycle: "MONTHLY" | "ANNUAL" | null;
   expiresAt: string | null;
 } | null;
-type Website = {
-  type: "NONE" | "TEMPLATE" | "CUSTOM";
-  title?: string | null;
-  description?: string | null;
-  customDomain?: string | null;
-} | null;
-
 const salonCode = (...values: Array<FormDataEntryValue | null>) => {
   for (const value of values) {
     const code = String(value ?? "")
@@ -122,6 +127,8 @@ const copy: Record<Section, string> = {
   Users: "Manage platform super administrators and salon account credentials.",
   Subscriptions: "Track plans, trial expiration dates, and tier upgrades.",
   Plans: "Configure the feature bundles available to salon subscriptions.",
+  Sessions: "Monitor active logins and support impersonation sessions.",
+  Websites: "Every salon website: publishing status, addresses and custom-domain health.",
   "Audit Log":
     "Chronological audit trail of all platform-wide administrative actions.",
   Settings:
@@ -178,6 +185,14 @@ export default function AdminApp() {
   const [sectionLoading, setSectionLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionLabel, setActionLabel] = useState("");
+  const [systemChecks, setSystemChecks] = useState<SystemCheck[] | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    tone?: "danger";
+    onConfirm: () => void;
+  } | null>(null);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -241,33 +256,52 @@ export default function AdminApp() {
 
   useEffect(() => {
     if (!success) return;
-    const timer = window.setTimeout(() => setSuccess(""), 3500);
-    return () => window.clearTimeout(timer);
+    toast.success(success);
+    setSuccess("");
   }, [success]);
 
   useEffect(() => {
     if (!error || !auth) return;
-    const timer = window.setTimeout(() => setError(""), 5000);
-    return () => window.clearTimeout(timer);
+    toast.error(error);
+    setError("");
   }, [error, auth]);
+
+  useEffect(() => {
+    if (submitting && actionLabel) toast.loading(actionLabel, { id: "action-progress" });
+    else toast.dismiss("action-progress");
+  }, [submitting, actionLabel]);
+
+  useEffect(() => {
+    if (!auth || section !== "Websites") return;
+    void api<SystemCheck[]>("/api/platform/system-status").then(setSystemChecks).catch(() => setSystemChecks(null));
+  }, [auth, section]);
 
   useEffect(() => {
     if (!auth) return;
 
     if (section === "Overview") {
-      setSectionLoading(true);
-      api<OverviewData>("/api/platform/overview")
-        .then((res) => {
-          setOverview(res);
-          if (res.salons) setSalons(res.salons);
-        })
-        .catch((e) => {
-          setError(
-            e instanceof Error ? e.message : "Could not refresh the overview.",
-          );
-        })
-        .finally(() => setSectionLoading(false));
-      return;
+      const refresh = (silent: boolean) => {
+        if (!silent) setSectionLoading(true);
+        return api<OverviewData>("/api/platform/overview")
+          .then((res) => {
+            setOverview(res);
+            if (res.salons) setSalons(res.salons);
+          })
+          .catch((e) => {
+            if (!silent)
+              setError(
+                e instanceof Error ? e.message : "Could not refresh the overview.",
+              );
+          })
+          .finally(() => {
+            if (!silent) setSectionLoading(false);
+          });
+      };
+      void refresh(false);
+      const timer = window.setInterval(() => {
+        if (document.visibilityState === "visible") void refresh(true);
+      }, 25000);
+      return () => window.clearInterval(timer);
     }
 
     if (
@@ -478,9 +512,49 @@ export default function AdminApp() {
     }
   }
 
-  async function handleDeleteSalon(salon: Salon) {
-    if (!confirm(`Are you sure you want to archive "${salon.salonName}"?`))
-      return;
+  function handleImpersonateSalon(salon: Salon) {
+    setConfirmState({
+      title: "Start a support session?",
+      description: `You'll be logged in as "${salon.salonName}"'s admin. This is recorded in the audit log.`,
+      confirmLabel: "Start session",
+      onConfirm: () => {
+        setConfirmState(null);
+        void runImpersonateSalon(salon);
+      },
+    });
+  }
+
+  async function runImpersonateSalon(salon: Salon) {
+    setSubmitting(true);
+    setActionLabel(`Starting impersonation session for ${salon.salonName}…`);
+    setError("");
+    try {
+      await api(`/api/platform/salons/${salon.id}/impersonate`, { method: "POST" });
+      const erpUrl = process.env.NEXT_PUBLIC_ERP_URL?.trim();
+      if (erpUrl) window.open(erpUrl, "_blank", "noopener,noreferrer");
+      else setError("NEXT_PUBLIC_ERP_URL is not configured; the session was created but no ERP link is available.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start impersonation session.");
+    } finally {
+      setSubmitting(false);
+      setActionLabel("");
+    }
+  }
+
+  function handleDeleteSalon(salon: Salon) {
+    setConfirmState({
+      title: "Archive this salon?",
+      description: `"${salon.salonName}" will be archived and its access suspended. You can restore it later.`,
+      confirmLabel: "Archive salon",
+      tone: "danger",
+      onConfirm: () => {
+        setConfirmState(null);
+        void runDeleteSalon(salon);
+      },
+    });
+  }
+
+  async function runDeleteSalon(salon: Salon) {
     setSubmitting(true);
     setActionLabel(
       `Archiving ${salon.salonName}…`,
@@ -498,8 +572,19 @@ export default function AdminApp() {
     }
   }
 
-  async function handleRestoreSalon(salon: Salon) {
-    if (!confirm(`Restore "${salon.salonName}" as a suspended salon?`)) return;
+  function handleRestoreSalon(salon: Salon) {
+    setConfirmState({
+      title: "Restore this salon?",
+      description: `"${salon.salonName}" will be restored with a suspended status. You can activate it afterward.`,
+      confirmLabel: "Restore salon",
+      onConfirm: () => {
+        setConfirmState(null);
+        void runRestoreSalon(salon);
+      },
+    });
+  }
+
+  async function runRestoreSalon(salon: Salon) {
     setSubmitting(true);
     setActionLabel(
       `Restoring ${salon.salonName}…`,
@@ -671,6 +756,111 @@ export default function AdminApp() {
     }
   }
 
+  function handleRevokeSessions(u: PlatformUser) {
+    setConfirmState({
+      title: "Force-logout this user?",
+      description: `All active sessions for "${u.name}" will be revoked immediately.`,
+      confirmLabel: "Revoke sessions",
+      tone: "danger",
+      onConfirm: () => {
+        setConfirmState(null);
+        void runRevokeSessions(u);
+      },
+    });
+  }
+
+  async function runRevokeSessions(u: PlatformUser) {
+    setSubmitting(true);
+    setActionLabel(`Revoking sessions for ${u.name}…`);
+    setError("");
+    try {
+      const result = await api<{ revokedCount: number }>(
+        `/api/platform/users/${u.id}/sessions`,
+        { method: "DELETE" },
+      );
+      setSuccess(`Revoked ${result.revokedCount} active session(s) for ${u.name}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not revoke sessions.");
+    } finally {
+      setSubmitting(false);
+      setActionLabel("");
+    }
+  }
+
+  function handleUnpublishWebsite(site: PlatformWebsite) {
+    setConfirmState({
+      title: "Unpublish this website?",
+      description: `"${site.salonName}"'s public website will go offline immediately. The salon can publish it again.`,
+      confirmLabel: "Unpublish",
+      tone: "danger",
+      onConfirm: () => {
+        setConfirmState(null);
+        void runWebsiteAction(site, { isPublished: false }, "Website unpublished.");
+      },
+    });
+  }
+
+  async function runWebsiteAction(site: PlatformWebsite, body: Record<string, unknown>, success: string) {
+    setSubmitting(true);
+    setActionLabel(`Updating ${site.salonName}'s website…`);
+    try {
+      await api(`/api/platform/salons/${site.salonId}/website`, { method: "PUT", body: JSON.stringify(body) });
+      setData(await api("/api/platform/websites"));
+      setSuccess(success);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update the website.");
+    } finally {
+      setSubmitting(false);
+      setActionLabel("");
+    }
+  }
+
+  async function handleVerifyWebsite(site: PlatformWebsite) {
+    setSubmitting(true);
+    setActionLabel("Checking DNS…");
+    try {
+      await api(`/api/platform/salons/${site.salonId}/website/verify-domain`, { method: "POST" });
+      setData(await api("/api/platform/websites"));
+      setSuccess("DNS checked.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not check DNS.");
+    } finally {
+      setSubmitting(false);
+      setActionLabel("");
+    }
+  }
+
+  function handleRevokeSession(s: PlatformSession) {
+    setConfirmState({
+      title: s.impersonatedBy ? "End this impersonation session?" : "End this session?",
+      description: s.impersonatedBy
+        ? `The support session for "${s.user.name}" will be ended immediately.`
+        : `"${s.user.name}" will be signed out of this session immediately.`,
+      confirmLabel: "End session",
+      tone: "danger",
+      onConfirm: () => {
+        setConfirmState(null);
+        void runRevokeSession(s);
+      },
+    });
+  }
+
+  async function runRevokeSession(s: PlatformSession) {
+    setSubmitting(true);
+    setActionLabel("Revoking session…");
+    setError("");
+    try {
+      await api(`/api/platform/sessions/${s.id}`, { method: "DELETE" });
+      setData(list<PlatformSession>(data).filter((item) => item.id !== s.id));
+      setSuccess("Session revoked.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not revoke session.");
+    } finally {
+      setSubmitting(false);
+      setActionLabel("");
+    }
+  }
+
   async function saveSettings(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -735,6 +925,8 @@ export default function AdminApp() {
     [Users, "Users"],
     [CreditCard, "Subscriptions"],
     [CreditCard, "Plans"],
+    [Globe, "Websites"],
+    [ShieldAlert, "Sessions"],
     [FileClock, "Audit Log"],
     [Settings, "Settings"],
     [Bell, "Notifications"],
@@ -761,59 +953,20 @@ export default function AdminApp() {
     );
 
   return (
-    <main className="min-h-screen bg-[#f7f8fa] text-slate-950">
+    <main className="min-h-screen bg-[#f7f8fa] text-foreground">
       <RequestFeedback />
-      <div
-        aria-live="polite"
-        className="fixed right-4 top-4 z-[100] w-[calc(100%-2rem)] max-w-md space-y-3 sm:right-6 sm:top-6"
-      >
-        <AnimatePresence initial={false}>
-          {submitting && actionLabel && (
-            <motion.div
-              key="progress"
-              initial={{ opacity: 0, x: 24, y: -8 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              exit={{ opacity: 0, x: 24, y: -8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              role="status"
-              className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 shadow-lg"
-            >
-              {actionLabel}
-            </motion.div>
-          )}
-          {error && (
-            <motion.div
-              key={`error-${error}`}
-              initial={{ opacity: 0, x: 24, y: -8 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              exit={{ opacity: 0, x: 24, y: -8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <Notice
-                type="error"
-                message={error}
-                onClose={() => setError("")}
-              />
-            </motion.div>
-          )}
-          {success && (
-            <motion.div
-              key={`success-${success}`}
-              initial={{ opacity: 0, x: 24, y: -8 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              exit={{ opacity: 0, x: 24, y: -8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <Notice
-                type="success"
-                message={success}
-                onClose={() => setSuccess("")}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-zinc-200 bg-white lg:flex lg:flex-col shadow-sm">
+      <Toaster position="top-right" richColors closeButton />
+      <ConfirmDialog
+        open={confirmState !== null}
+        title={confirmState?.title ?? ""}
+        description={confirmState?.description ?? ""}
+        confirmLabel={confirmState?.confirmLabel ?? "Confirm"}
+        tone={confirmState?.tone}
+        busy={submitting}
+        onCancel={() => setConfirmState(null)}
+        onConfirm={() => confirmState?.onConfirm()}
+      />
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border bg-card lg:flex lg:flex-col shadow-sm">
         <div className="p-6 pb-3">
           <Brand />
         </div>
@@ -823,18 +976,18 @@ export default function AdminApp() {
 
       {mobile && (
         <div
-          className="fixed inset-0 z-50 bg-zinc-950/40 lg:hidden"
+          className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs lg:hidden"
           onClick={() => setMobile(false)}
         >
           <aside
-            className="flex h-full w-72 flex-col bg-white"
+            className="flex h-full w-72 flex-col bg-card"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between border-b p-5">
               <Brand />
-              <button onClick={() => setMobile(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close menu" onClick={() => setMobile(false)}>
                 <X />
-              </button>
+              </Button>
             </div>
             <Navigation items={nav} section={section} choose={choose} />
             <SidebarFooter onLogout={logout} />
@@ -843,26 +996,23 @@ export default function AdminApp() {
       )}
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/90 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-border bg-white/90 backdrop-blur">
           <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMobile(true)} className="lg:hidden">
+              <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu" onClick={() => setMobile(true)}>
                 <Menu />
-              </button>
+              </Button>
               <div>
-                <p className="text-xs text-zinc-400">Workspace / {section}</p>
+                <p className="text-xs text-muted-foreground">Workspace / {section}</p>
                 <h1 className="text-xl font-bold">{section}</h1>
               </div>
             </div>
             {(section === "Overview" || section === "Salons") && (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => choose("Notifications")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
-                >
+                <Button variant="outline" className="h-9 gap-2 px-4 font-semibold" onClick={() => choose("Notifications")}>
                   <Bell className="h-4 w-4" />
                   Broadcast
-                </button>
+                </Button>
                 <button onClick={openCreate} className={buttonClass}>
                   <Plus className="h-4 w-4" />
                   Add Salon
@@ -880,6 +1030,7 @@ export default function AdminApp() {
                 overview={overview}
                 onViewSalons={() => choose("Salons")}
                 onUpdateStatus={handleUpdateSalonStatus}
+                busy={submitting}
               />
             )}
 
@@ -896,6 +1047,8 @@ export default function AdminApp() {
                 onDelete={handleDeleteSalon}
                 onRestore={handleRestoreSalon}
                 onViewDetails={setViewingSalon}
+                onImpersonate={handleImpersonateSalon}
+                busy={submitting}
               />
             )}
 
@@ -913,62 +1066,62 @@ export default function AdminApp() {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <button
                   onClick={() => setCreatingPlan(true)}
-                  className="flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-white text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                  className="flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-card text-sm font-semibold text-foreground/80 hover:bg-muted/60"
                 >
                   <Plus className="mb-2 h-5 w-5" />
                   Create plan
                 </button>
                 {sectionLoading && (
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted-foreground">
                     Loading plans…
                   </p>
                 )}
                 {list<Plan>(data).map((plan) => (
                   <article
                     key={plan.id}
-                    className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
+                    className="rounded-2xl border border-border bg-card p-5 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">
+                        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                           {plan.code}
                         </p>
                         <h2 className="mt-1 text-lg font-bold">{plan.name}</h2>
                       </div>
                       <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${plan.isActive ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}
+                        className={`rounded-full px-2 py-1 text-xs font-semibold ${plan.isActive ? "bg-emerald-50 text-emerald-700" : "bg-muted/60 text-foreground/70"}`}
                       >
                         {plan.isActive ? "Active" : "Inactive"}
                       </span>
                     </div>
-                    <p className="mt-3 text-sm text-zinc-500">
+                    <p className="mt-3 text-sm text-muted-foreground">
                       {plan.description ||
                         "Feature bundle for salon workspaces."}
                     </p>
-                    <p className="mt-4 text-sm font-semibold text-zinc-900">
+                    <p className="mt-4 text-sm font-semibold text-foreground">
                       {plan.monthlyPrice == null
                         ? "Custom pricing"
                         : `₹${plan.monthlyPrice}/month`}
                     </p>
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Included features
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {plan.features?.map(({ feature }) => (
                         <span
                           key={feature.code}
-                          className="rounded-md bg-zinc-100 px-2 py-1 text-xs text-zinc-700"
+                          className="rounded-md bg-muted/60 px-2 py-1 text-xs text-foreground/80"
                         >
                           {feature.name}
                         </span>
                       ))}
                     </div>
-                    <p className="mt-4 text-xs text-zinc-500">
+                    <p className="mt-4 text-xs text-muted-foreground">
                       {plan._count?.subscriptions ?? 0} subscription(s)
                     </p>
                     <button
                       onClick={() => setEditingPlan(plan)}
-                      className="mt-4 text-sm font-semibold text-zinc-700 underline"
+                      className="mt-4 text-sm font-semibold text-foreground/80 underline"
                     >
                       Edit plan
                     </button>
@@ -986,6 +1139,32 @@ export default function AdminApp() {
                 onResetPassword={setResettingUser}
                 roles={platformRoles}
                 onAssignPlatformRole={assignPlatformRole}
+                onRevokeSessions={handleRevokeSessions}
+                busy={submitting}
+              />
+            )}
+
+            {section === "Websites" && (
+              <WebsitesView
+                items={list<PlatformWebsite>(data)}
+                checks={systemChecks}
+                loading={sectionLoading}
+                busy={submitting}
+                onManage={(salonId) => {
+                  const target = salons.find((item) => item.id === salonId);
+                  if (target) setManagingSalon(target);
+                }}
+                onUnpublish={handleUnpublishWebsite}
+                onVerify={(site) => void handleVerifyWebsite(site)}
+              />
+            )}
+
+            {section === "Sessions" && (
+              <SessionsView
+                items={list<PlatformSession>(data)}
+                loading={sectionLoading}
+                onRevoke={handleRevokeSession}
+                busy={submitting}
               />
             )}
 
@@ -1129,26 +1308,30 @@ function SalonEntitlementsModal({
   const [features, setFeatures] = useState<Feature[]>([]);
   const [subscription, setSubscription] = useState<SalonSubscription>(null);
   const [enabled, setEnabled] = useState<string[]>([]);
-  const [website, setWebsite] = useState<Website>({ type: "NONE" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  useEffect(() => {
+    if (!error) return;
+    toast.error(error);
+    setError("");
+  }, [error]);
   const loadData = useCallback(async () => {
     setBusy(true);
     try {
-      const [p, f, s, e, w] = await Promise.all([
+      const [p, f, s, e] = await Promise.all([
         api<Plan[]>("/api/platform/plans"),
         api<Feature[]>("/api/platform/features"),
         api<SalonSubscription>(`/api/platform/salons/${salon.id}/subscription`),
         api<{ code: string; enabled: boolean }[]>(
           `/api/platform/salons/${salon.id}/features`,
         ),
-        api<Website>(`/api/platform/salons/${salon.id}/website`),
       ]);
       setPlans(p);
       setFeatures(f);
       setSubscription(s);
       setEnabled(e.filter((item) => item.enabled).map((item) => item.code));
-      setWebsite(w ?? { type: "NONE" });
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Could not load entitlement data.",
@@ -1163,6 +1346,7 @@ function SalonEntitlementsModal({
   const saveSubscription = async (renew = false) => {
     const planId = subscription?.planId;
     if (!planId) return;
+    setSaving(true);
     try {
       const saved = await api<SalonSubscription>(
         `/api/platform/salons/${salon.id}/subscription${renew ? "/renew" : ""}`,
@@ -1171,6 +1355,7 @@ function SalonEntitlementsModal({
           body: JSON.stringify({
             planId,
             status: renew ? "ACTIVE" : subscription.status,
+            billingCycle: subscription.billingCycle,
             expiresAt: subscription.expiresAt,
           }),
         },
@@ -1179,10 +1364,28 @@ function SalonEntitlementsModal({
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save subscription.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const cancelSubscription = async () => {
+    if (!subscription) return;
+    setSaving(true);
+    try {
+      const saved = await api<SalonSubscription>(
+        `/api/platform/salons/${salon.id}/subscription/cancel`,
+        { method: "POST" },
+      );
+      setSubscription(saved);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not cancel subscription.");
+    } finally {
+      setSaving(false);
     }
   };
   const setPlan = async (planId: string) => {
-    const current = subscription ?? { status: "ACTIVE", expiresAt: null };
+    const current = subscription ?? { status: "ACTIVE", billingCycle: "MONTHLY" as const, expiresAt: null };
     try {
       const saved = await api<SalonSubscription>(
         `/api/platform/salons/${salon.id}/subscription`,
@@ -1191,6 +1394,7 @@ function SalonEntitlementsModal({
           body: JSON.stringify({
             planId,
             status: current.status,
+            billingCycle: current.billingCycle,
             expiresAt: current.expiresAt,
           }),
         },
@@ -1199,6 +1403,19 @@ function SalonEntitlementsModal({
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not assign plan.");
+    }
+  };
+  const setBillingCycle = async (billingCycle: "MONTHLY" | "ANNUAL") => {
+    if (!subscription) return;
+    try {
+      const saved = await api<SalonSubscription>(
+        `/api/platform/salons/${salon.id}/subscription`,
+        { method: "PATCH", body: JSON.stringify({ planId: subscription.planId, status: subscription.status, billingCycle }) },
+      );
+      setSubscription(saved);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update billing cycle.");
     }
   };
   const toggle = async (code: string) => {
@@ -1213,17 +1430,6 @@ function SalonEntitlementsModal({
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not update feature.");
-    }
-  };
-  const saveWebsite = async () => {
-    try {
-      await api(`/api/platform/salons/${salon.id}/website`, {
-        method: "PUT",
-        body: JSON.stringify(website),
-      });
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save website.");
     }
   };
   const grantTemplateAccess = async () => {
@@ -1258,28 +1464,24 @@ function SalonEntitlementsModal({
         salon={salon}
         subscription={subscription}
         enabledFeatures={enabled}
-        website={website}
-        onWebsiteChange={setWebsite}
-        onSave={saveWebsite}
         onGrantTemplateAccess={grantTemplateAccess}
         onBack={() => setTab("Plan")}
         onClose={onClose}
-        error={error}
       />
     );
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-zinc-950/60 sm:items-center sm:p-5">
-      <div className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+    <ModalOverlay onClose={onClose}>
+      <div className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl">
         <header className="flex items-center justify-between border-b p-5">
           <div>
-            <p className="text-xs font-bold uppercase text-zinc-400">
+            <p className="text-xs font-bold uppercase text-muted-foreground">
               Salon control centre
             </p>
             <h2 className="text-xl font-bold">{salon.salonName}</h2>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 hover:bg-zinc-100"
+            className="rounded-lg p-2 hover:bg-muted/60"
           >
             <X />
           </button>
@@ -1290,7 +1492,7 @@ function SalonEntitlementsModal({
               <button
                 key={item}
                 onClick={() => setTab(item)}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold ${tab === item ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100"}`}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold ${tab === item ? "bg-primary text-white" : "text-foreground/70 hover:bg-muted/60"}`}
               >
                 {item}
               </button>
@@ -1298,13 +1500,8 @@ function SalonEntitlementsModal({
           )}
         </nav>
         <div className="overflow-y-auto p-5">
-          {error && (
-            <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
           {busy ? (
-            <p className="text-sm text-zinc-500">Loading...</p>
+            <p className="text-sm text-muted-foreground">Loading...</p>
           ) : (
             <>
               {tab === "Plan" && (
@@ -1313,7 +1510,7 @@ function SalonEntitlementsModal({
                   <select
                     value={subscription?.planId ?? ""}
                     onChange={(e) => void setPlan(e.target.value)}
-                    className="mt-3 w-full rounded-xl border px-3 py-2.5"
+                    className={inputClass}
                   >
                     <option value="">Select plan</option>
                     {plans
@@ -1329,24 +1526,45 @@ function SalonEntitlementsModal({
               {tab === "Subscription" && (
                 <section className="space-y-3">
                   <h3 className="font-semibold">Subscription status</h3>
-                  <p className="text-sm text-zinc-600">
+                  <p className="text-sm text-foreground/70">
                     {subscription
                       ? `${subscription.status} · ${subscription.expiresAt ? new Date(subscription.expiresAt).toLocaleDateString() : "No expiry"}`
                       : "No subscription yet"}
                   </p>
-                  <button
-                    disabled={!subscription}
-                    onClick={() => void saveSubscription(true)}
-                    className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                  >
-                    Renew subscription
-                  </button>
+                  <label className="block text-sm font-medium text-foreground/80">
+                    Billing cycle
+                    <select
+                      disabled={!subscription}
+                      value={subscription?.billingCycle ?? "MONTHLY"}
+                      onChange={(e) => void setBillingCycle(e.target.value as "MONTHLY" | "ANNUAL")}
+                      className={`${inputClass} mt-1`}
+                    >
+                      <option value="MONTHLY">Monthly</option>
+                      <option value="ANNUAL">Annual</option>
+                    </select>
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={!subscription || saving}
+                      onClick={() => void saveSubscription(true)}
+                      className={buttonClass}
+                    >
+                      {saving ? "Working…" : "Renew subscription"}
+                    </button>
+                    <button
+                      disabled={!subscription || subscription.status === "CANCELLED" || saving}
+                      onClick={() => setConfirmCancel(true)}
+                      className="rounded-xl border border-rose-200 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                    >
+                      {saving ? "Working…" : "Cancel subscription"}
+                    </button>
+                  </div>
                 </section>
               )}
               {tab === "Features" && (
                 <section>
                   <h3 className="font-semibold">Feature overrides</h3>
-                  <p className="mt-1 text-xs text-zinc-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Each change is stored as a salon override.
                   </p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1370,210 +1588,180 @@ function SalonEntitlementsModal({
           )}
         </div>
       </div>
-    </div>
+      <ConfirmDialog
+        open={confirmCancel}
+        title="Cancel this subscription?"
+        description={`Cancelling the subscription for "${salon.salonName}" immediately suspends the salon's access.`}
+        confirmLabel="Cancel subscription"
+        tone="danger"
+        busy={saving}
+        onCancel={() => setConfirmCancel(false)}
+        onConfirm={() => {
+          setConfirmCancel(false);
+          void cancelSubscription();
+        }}
+      />
+    </ModalOverlay>
   );
 }
+
+type WebsiteInfo = {
+  slug: string;
+  settings: {
+    type: "NONE" | "TEMPLATE" | "CUSTOM";
+    isPublished: boolean;
+    customDomain: string | null;
+    domainStatus: "NONE" | "PENDING_DNS" | "VERIFYING" | "ACTIVE" | "FAILED";
+    domainError: string | null;
+  } | null;
+  urls: { subdomain: string | null; custom: string | null; live: string | null };
+  dns: { cname: { host: string; value: string }; txt: { host: string; value: string } } | null;
+};
 
 function WebsiteIntegrationWorkspace({
   salon,
   subscription,
   enabledFeatures,
-  website,
-  onWebsiteChange,
-  onSave,
   onGrantTemplateAccess,
   onBack,
   onClose,
-  error,
 }: {
   salon: Salon;
   subscription: SalonSubscription;
   enabledFeatures: string[];
-  website: Website;
-  onWebsiteChange: (value: Website) => void;
-  onSave: () => Promise<void>;
   onGrantTemplateAccess: () => Promise<void>;
   onBack: () => void;
   onClose: () => void;
-  error: string;
 }) {
-  const [saving, setSaving] = useState(false);
-  const templateEligible =
-    enabledFeatures.includes("ONLINE_BOOKING") &&
-    enabledFeatures.includes("TEMPLATE_WEBSITE") &&
-    ["ACTIVE", "TRIAL"].includes(subscription?.status ?? "");
-  const customEligible =
-    enabledFeatures.includes("ONLINE_BOOKING") &&
-    enabledFeatures.includes("CUSTOM_WEBSITE") &&
-    ["ACTIVE", "TRIAL"].includes(subscription?.status ?? "");
-  const selected = website?.type ?? "NONE";
-  const save = async () => {
-    setSaving(true);
+  const [info, setInfo] = useState<WebsiteInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [domain, setDomain] = useState("");
+  const active = ["ACTIVE", "TRIAL"].includes(subscription?.status ?? "");
+  const templateEligible = active && enabledFeatures.includes("ONLINE_BOOKING") && enabledFeatures.includes("TEMPLATE_WEBSITE");
+  const customEligible = active && enabledFeatures.includes("ONLINE_BOOKING") && enabledFeatures.includes("CUSTOM_WEBSITE") && enabledFeatures.includes("PUBLIC_API");
+  const current = info?.settings?.type ?? "NONE";
+
+  const load = useCallback(async () => {
     try {
-      await onSave();
+      const next = await api<WebsiteInfo>(`/api/platform/salons/${salon.id}/website`);
+      setInfo(next);
+      setDomain(next.settings?.customDomain ?? "");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not load the website settings.");
+    }
+  }, [salon.id]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const act = async (task: () => Promise<WebsiteInfo>, success: string) => {
+    setBusy(true);
+    try {
+      const next = await task();
+      setInfo(next);
+      setDomain(next.settings?.customDomain ?? "");
+      toast.success(success);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not update the website.");
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
-  const missingTemplateFeatures = [
-    "ONLINE_BOOKING",
-    "TEMPLATE_WEBSITE",
-    "WEBSITE_MANAGEMENT",
-  ].filter((code) => !enabledFeatures.includes(code));
-  if (!templateEligible)
-    return (
-      <TemplateWebsiteBlocked
-        salon={salon}
-        subscription={subscription}
-        missingFeatures={missingTemplateFeatures}
-        onGrant={onGrantTemplateAccess}
-        onBack={onBack}
-        onClose={onClose}
-      />
-    );
+  const put = (body: Record<string, unknown>, success: string) =>
+    act(() => api<WebsiteInfo>(`/api/platform/salons/${salon.id}/website`, { method: "PUT", body: JSON.stringify(body) }), success);
+
+  const missingTemplateFeatures = ["ONLINE_BOOKING", "TEMPLATE_WEBSITE", "WEBSITE_MANAGEMENT"].filter((code) => !enabledFeatures.includes(code));
+  if (!templateEligible && !customEligible)
+    return <TemplateWebsiteBlocked salon={salon} subscription={subscription} missingFeatures={missingTemplateFeatures} onGrant={onGrantTemplateAccess} onBack={onBack} onClose={onClose} />;
+
+  const status = info?.settings?.domainStatus ?? "NONE";
+  const published = Boolean(info?.settings?.isPublished);
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-zinc-950/60 sm:items-center sm:p-5">
-      <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+    <ModalOverlay onClose={onClose}>
+      <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl">
         <header className="flex items-center justify-between border-b p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-zinc-950 p-2.5 text-white">
-              <Globe className="h-5 w-5" />
-            </div>
+            <div className="rounded-xl bg-primary p-2.5 text-primary-foreground"><Globe className="h-5 w-5" /></div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">
-                Website Integration
-              </p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Website</p>
               <h2 className="text-xl font-bold">{salon.salonName}</h2>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 hover:bg-zinc-100"
-          >
-            <X />
-          </button>
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}>{published ? "Published" : current === "NONE" ? "Not set up" : "Draft"}</span>
+            <button onClick={onClose} className="rounded-lg p-2 hover:bg-muted/60" aria-label="Close"><X /></button>
+          </div>
         </header>
-        <div className="overflow-y-auto p-5 sm:p-7">
-          {error && (
-            <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-          <div
-            className={`rounded-2xl border p-4 ${templateEligible || customEligible ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}
-          >
-            <p className="font-semibold text-zinc-950">
-              {templateEligible || customEligible
-                ? "This salon is eligible for website integration."
-                : "Website integration is currently unavailable for this salon."}
-            </p>
-            <p className="mt-1 text-sm text-zinc-600">
-              Plan:{" "}
-              {subscription ? subscription.status : "No active subscription"}.
-              Required feature access is checked before publishing.
-            </p>
-          </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <button
-              disabled={!templateEligible}
-              onClick={() =>
-                onWebsiteChange({
-                  ...(website ?? {}),
-                  type: "TEMPLATE",
-                  customDomain: null,
-                })
-              }
-              className={`rounded-2xl border p-5 text-left transition ${selected === "TEMPLATE" ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-white"} disabled:cursor-not-allowed disabled:opacity-45`}
-            >
-              <p className="text-sm font-bold">DropXcutz Template Website</p>
-              <p
-                className={`mt-2 text-sm ${selected === "TEMPLATE" ? "text-zinc-300" : "text-zinc-500"}`}
-              >
-                Publish the managed booking site. No API key or developer setup
-                is required.
-              </p>
-              <p className="mt-4 text-xs font-semibold">
-                Requires: Online Booking + Template Website
-              </p>
-            </button>
-            <button
-              disabled={!customEligible}
-              onClick={() =>
-                onWebsiteChange({ ...(website ?? {}), type: "CUSTOM" })
-              }
-              className={`rounded-2xl border p-5 text-left transition ${selected === "CUSTOM" ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-white"} disabled:cursor-not-allowed disabled:opacity-45`}
-            >
-              <p className="text-sm font-bold">Custom Website</p>
-              <p
-                className={`mt-2 text-sm ${selected === "CUSTOM" ? "text-zinc-300" : "text-zinc-500"}`}
-              >
-                Connect a separately built customer website. This requires a
-                developer and approved custom-domain setup.
-              </p>
-              <p className="mt-4 text-xs font-semibold">
-                Requires: Online Booking + Custom Website
-              </p>
-            </button>
-          </div>
-          <div className="mt-6 rounded-2xl border border-zinc-200 p-5">
-            <h3 className="font-semibold">Publishing details</h3>
-            <label className="mt-4 block text-sm font-medium">
-              Custom domain{" "}
-              <span className="font-normal text-zinc-400">
-                (optional for template)
-              </span>
-              <input
-                value={website?.customDomain ?? ""}
-                onChange={(event) =>
-                  onWebsiteChange({
-                    ...(website ?? { type: selected }),
-                    customDomain: event.target.value,
-                  })
-                }
-                placeholder="booking.yoursalon.com"
-                className="mt-2 w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm"
-              />
-            </label>
-            {selected === "TEMPLATE" && (
-              <div className="mt-4 rounded-xl bg-zinc-50 p-4 text-sm text-zinc-700">
-                <p className="font-semibold">Local test URL</p>
-                <code className="mt-1 block break-all text-xs">
-                  http://localhost:3002
-                </code>
-                <p className="mt-2 text-xs text-zinc-500">
-                  This template uses salon code <b>{salon.code}</b>. After
-                  publishing the Salon Admin maintains services, staff,
-                  availability, and content.
-                </p>
+        <div className="space-y-6 overflow-y-auto p-5 sm:p-7">
+          {!info ? (
+            <div className="h-40 animate-pulse rounded-2xl bg-muted/60" />
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                {([
+                  { value: "TEMPLATE", name: "Template website", blurb: "Managed booking site hosted by DropXcutz. The salon designs it from its own dashboard.", need: "Online Booking + Template Website", ok: templateEligible },
+                  { value: "CUSTOM", name: "Custom website", blurb: "A developer-built site that calls our booking API with the salon's API key.", need: "Online Booking + Custom Website + Public API", ok: customEligible },
+                ] as const).map((option) => (
+                  <button key={option.value} disabled={busy || !option.ok} onClick={() => void put({ type: option.value }, `${option.name} selected.`)}
+                    className={`rounded-2xl border p-5 text-left transition ${current === option.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted/40"} disabled:cursor-not-allowed disabled:opacity-45`}>
+                    <p className="text-sm font-bold">{option.name}</p>
+                    <p className={`mt-2 text-sm ${current === option.value ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{option.blurb}</p>
+                    <p className="mt-3 text-xs font-semibold">{option.ok ? `Requires: ${option.need}` : `Not enabled — needs ${option.need}`}</p>
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
-          <div className="mt-6 flex flex-wrap justify-between gap-3">
-            <button
-              onClick={onBack}
-              className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-700"
-            >
-              Back to control centre
-            </button>
-            <button
-              disabled={
-                saving ||
-                selected === "NONE" ||
-                !(selected === "TEMPLATE" ? templateEligible : customEligible)
-              }
-              onClick={() => void save()}
-              className="rounded-xl bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-45"
-            >
-              {saving
-                ? "Publishing..."
-                : selected === "TEMPLATE"
-                  ? "Publish template website"
-                  : "Save custom website"}
-            </button>
+
+              {current !== "NONE" && (
+                <div className="rounded-2xl border border-border p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold">Publishing</h3>
+                      <p className="mt-0.5 text-sm text-muted-foreground">Address name: <b className="text-foreground">{info.slug}</b> (the salon can change it)</p>
+                      {info.urls.live ? (
+                        <a className="mt-1 block truncate text-sm font-medium text-primary underline" href={info.urls.live} target="_blank" rel="noopener noreferrer">{info.urls.live}</a>
+                      ) : (
+                        <p className="mt-1 text-xs text-amber-700">No public address yet — set PUBLIC_ROOT_DOMAIN on the API server so sites get https://name.yourdomain.com.</p>
+                      )}
+                    </div>
+                    <button disabled={busy} onClick={() => void put({ isPublished: !published }, published ? "Website unpublished." : "Website published.")} className={published ? "rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground/80 hover:bg-muted/60 disabled:opacity-50" : buttonClass}>
+                      {busy ? "Working…" : published ? "Unpublish" : "Publish website"}
+                    </button>
+                  </div>
+                  {current === "CUSTOM" && <p className="mt-3 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">Custom sites use the salon&apos;s API key (created by the salon in <b>API & Integrations</b>) and allowed domains. Publishing enables that key for public bookings.</p>}
+                </div>
+              )}
+
+              {current !== "NONE" && (
+                <div className="rounded-2xl border border-border p-5">
+                  <h3 className="font-semibold">Custom domain</h3>
+                  <p className="mt-0.5 text-sm text-muted-foreground">Optional. The salon usually connects this itself from its dashboard; you can do it on their behalf.</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <input value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="www.yoursalon.com" className={`${inputClass} max-w-sm`} aria-label="Custom domain" />
+                    <button disabled={busy || !domain.trim() || domain.trim() === info.settings?.customDomain} onClick={() => void put({ customDomain: domain }, "Domain saved — DNS records generated.")} className={buttonClass}>Connect</button>
+                    {info.settings?.customDomain && <button disabled={busy} onClick={() => void put({ customDomain: null }, "Domain removed.")} className={outlineButtonClass}>Remove</button>}
+                    {info.settings?.customDomain && <button disabled={busy} onClick={() => void act(() => api<WebsiteInfo>(`/api/platform/salons/${salon.id}/website/verify-domain`, { method: "POST" }), "DNS checked.")} className={outlineButtonClass}>Check DNS now</button>}
+                  </div>
+                  {info.settings?.customDomain && (
+                    <div className="mt-4 space-y-3 text-sm">
+                      <p>Status: <b>{{ NONE: "Not connected", PENDING_DNS: "Waiting for DNS", VERIFYING: "Verifying / issuing SSL", ACTIVE: "Live", FAILED: "Needs attention" }[status]}</b>{info.settings.domainError && status !== "ACTIVE" ? <span className="text-muted-foreground"> — {info.settings.domainError}</span> : null}</p>
+                      {info.dns && (
+                        <div className="overflow-x-auto rounded-xl bg-muted/60 p-3 font-mono text-xs">
+                          <p>CNAME&nbsp; {info.dns.cname.host} → {info.dns.cname.value}</p>
+                          <p>TXT&nbsp;&nbsp;&nbsp;&nbsp; {info.dns.txt.host} = {info.dns.txt.value}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          <div className="flex justify-between gap-3">
+            <button onClick={onBack} className={outlineButtonClass}>Back to control centre</button>
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1602,15 +1790,15 @@ function TemplateWebsiteBlocked({
     }
   };
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-zinc-950/60 sm:items-center sm:p-5">
-      <div className="w-full max-w-2xl rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+    <ModalOverlay onClose={onClose}>
+      <div className="w-full max-w-2xl rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl">
         <header className="flex items-center justify-between border-b p-5">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-amber-100 p-2.5 text-amber-800">
               <Globe className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Website Integration
               </p>
               <h2 className="text-xl font-bold">{salon.salonName}</h2>
@@ -1618,7 +1806,7 @@ function TemplateWebsiteBlocked({
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 hover:bg-zinc-100"
+            className="rounded-lg p-2 hover:bg-muted/60"
           >
             <X />
           </button>
@@ -1627,7 +1815,7 @@ function TemplateWebsiteBlocked({
           <h3 className="text-lg font-bold">
             Template website is not enabled yet
           </h3>
-          <p className="mt-2 text-sm text-zinc-600">
+          <p className="mt-2 text-sm text-foreground/70">
             The Publish button is disabled because this salon does not currently
             have the required access. Subscription status:{" "}
             <b>{subscription?.status ?? "No subscription"}</b>.
@@ -1640,236 +1828,35 @@ function TemplateWebsiteBlocked({
               {missingFeatures.map((feature) => (
                 <span
                   key={feature}
-                  className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-900"
+                  className="rounded-full bg-card px-3 py-1 text-xs font-semibold text-amber-900"
                 >
                   {feature.replace(/_/g, " ")}
                 </span>
               ))}
             </div>
           </div>
-          <p className="mt-5 text-sm text-zinc-600">
+          <p className="mt-5 text-sm text-foreground/70">
             Granting access creates salon-level feature overrides. Use this only
-            when the salon's plan or approved upgrade allows a template website.
+            when the salon&apos;s plan or approved upgrade allows a template website.
           </p>
           <div className="mt-6 flex flex-wrap justify-between gap-3">
             <button
               onClick={onBack}
-              className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-700"
+              className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground/80"
             >
               Back to control centre
             </button>
             <button
               disabled={granting || subscription === null}
               onClick={() => void grant()}
-              className="rounded-xl bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-45"
+              className={buttonClass}
             >
               {granting ? "Enabling..." : "Enable template website access"}
             </button>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-export function LegacySalonEntitlementsModal({
-  salon,
-  onClose,
-  onSaved,
-}: {
-  salon: Salon;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [features, setFeatures] = useState<Feature[]>([]);
-  const [subscription, setSubscription] = useState<SalonSubscription>(null);
-  const [enabled, setEnabled] = useState<string[]>([]);
-  const [website, setWebsite] = useState<Website>({ type: "NONE" });
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(true);
-  const loadData = useCallback(async () => {
-    setBusy(true);
-    try {
-      const [p, f, s, e, w] = await Promise.all([
-        api<Plan[]>("/api/platform/plans"),
-        api<Feature[]>("/api/platform/features"),
-        api<SalonSubscription>(`/api/platform/salons/${salon.id}/subscription`),
-        api<{ code: string; enabled: boolean }[]>(
-          `/api/platform/salons/${salon.id}/features`,
-        ),
-        api<Website>(`/api/platform/salons/${salon.id}/website`),
-      ]);
-      setPlans(p);
-      setFeatures(f);
-      setSubscription(s);
-      setEnabled(e.filter((x) => x.enabled).map((x) => x.code));
-      setWebsite(w ?? { type: "NONE" });
-      setError("");
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Could not load entitlement data.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [salon.id]);
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-  const saveSubscription = async (planId: string) => {
-    const payload = {
-      planId,
-      status: subscription?.status ?? "ACTIVE",
-      expiresAt: subscription?.expiresAt ?? null,
-    };
-    try {
-      const saved = await api<SalonSubscription>(
-        `/api/platform/salons/${salon.id}/subscription`,
-        {
-          method: subscription ? "PATCH" : "POST",
-          body: JSON.stringify(payload),
-        },
-      );
-      setSubscription(saved);
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save subscription.");
-    }
-  };
-  const toggleFeature = async (code: string) => {
-    const next = !enabled.includes(code);
-    try {
-      await api(`/api/platform/salons/${salon.id}/features`, {
-        method: "PUT",
-        body: JSON.stringify({ code, enabled: next }),
-      });
-      setEnabled((items) =>
-        next ? [...items, code] : items.filter((item) => item !== code),
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update feature.");
-    }
-  };
-  const saveWebsite = async () => {
-    try {
-      await api(`/api/platform/salons/${salon.id}/website`, {
-        method: "PUT",
-        body: JSON.stringify(website),
-      });
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save website.");
-    }
-  };
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-zinc-950/60 p-0 sm:items-center sm:p-5">
-      <div className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
-        <header className="flex items-center justify-between border-b p-5">
-          <div>
-            <p className="text-xs font-bold uppercase text-zinc-400">
-              Salon control centre
-            </p>
-            <h2 className="text-xl font-bold">{salon.salonName}</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 hover:bg-zinc-100"
-          >
-            <X />
-          </button>
-        </header>
-        <div className="space-y-6 overflow-y-auto p-5">
-          {error && (
-            <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-          {busy ? (
-            <p className="text-sm text-zinc-500">
-              Loading…
-            </p>
-          ) : (
-            <>
-              <section>
-                <h3 className="font-semibold">Plan & subscription</h3>
-                <select
-                  value={subscription?.planId ?? ""}
-                  onChange={(e) => void saveSubscription(e.target.value)}
-                  className="mt-2 w-full rounded-xl border px-3 py-2.5"
-                >
-                  <option value="">Select plan</option>
-                  {plans
-                    .filter((plan) => plan.isActive)
-                    .map((plan) => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name}
-                      </option>
-                    ))}
-                </select>
-              </section>
-              <section>
-                <h3 className="font-semibold">Feature overrides</h3>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Toggle a feature to create a persisted salon override.
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {features.map((feature) => (
-                    <label
-                      key={feature.code}
-                      className="flex cursor-pointer items-center justify-between rounded-xl border p-3 text-sm"
-                    >
-                      <span>{feature.name}</span>
-                      <input
-                        type="checkbox"
-                        checked={enabled.includes(feature.code)}
-                        onChange={() => void toggleFeature(feature.code)}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </section>
-              <section>
-                <h3 className="font-semibold">Website</h3>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <select
-                    value={website?.type ?? "NONE"}
-                    onChange={(e) =>
-                      setWebsite({
-                        ...(website ?? {}),
-                        type: e.target.value as NonNullable<Website>["type"],
-                      })
-                    }
-                    className="rounded-xl border px-3 py-2.5"
-                  >
-                    <option value="NONE">Not published</option>
-                    <option value="TEMPLATE">Template</option>
-                    <option value="CUSTOM">Custom</option>
-                  </select>
-                  <input
-                    value={website?.customDomain ?? ""}
-                    onChange={(e) =>
-                      setWebsite({
-                        ...(website ?? { type: "NONE" }),
-                        customDomain: e.target.value,
-                      })
-                    }
-                    placeholder="Custom domain"
-                    className="rounded-xl border px-3 py-2.5"
-                  />
-                </div>
-                <button
-                  onClick={() => void saveWebsite()}
-                  className="mt-3 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Save website
-                </button>
-              </section>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1885,6 +1872,11 @@ function PlanEditor({
   const [features, setFeatures] = useState<Feature[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (!error) return;
+    toast.error(error);
+    setError("");
+  }, [error]);
   useEffect(() => {
     void api<Feature[]>("/api/platform/features")
       .then(setFeatures)
@@ -1927,10 +1919,10 @@ function PlanEditor({
     }
   }
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-zinc-950/60 p-4">
+    <ModalOverlay onClose={onClose}>
       <form
         onSubmit={submit}
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-card p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold">
@@ -1940,11 +1932,6 @@ function PlanEditor({
             <X />
           </button>
         </div>
-        {error && (
-          <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </p>
-        )}
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <input
             required
@@ -1981,7 +1968,7 @@ function PlanEditor({
             name="description"
             defaultValue={plan?.description ?? ""}
             placeholder="Description"
-            className="min-h-24 rounded-xl border px-3 py-2.5 sm:col-span-2"
+            className={`${inputClass} min-h-24 py-2.5 sm:col-span-2`}
           />
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -2024,6 +2011,6 @@ function PlanEditor({
           </button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }

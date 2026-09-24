@@ -25,7 +25,7 @@ export default function AppointmentCard({
   return (
     <div
       onClick={() => onClick?.(appointment)}
-      className="cursor-pointer rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
+      className="cursor-pointer rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
     >
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -46,7 +46,7 @@ export default function AppointmentCard({
           )}
 
           <div>
-            <h3 className="font-semibold text-slate-900">
+            <h3 className="font-semibold text-foreground">
               {appointment.customer.name}
             </h3>
 
@@ -66,11 +66,11 @@ export default function AppointmentCard({
       {/* Appointment Number */}
       <div className="mt-5 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
             Appointment
           </p>
 
-          <p className="font-semibold text-slate-900">
+          <p className="font-semibold text-foreground">
             {appointment.appointment.appointmentNumber}
           </p>
         </div>
@@ -88,7 +88,7 @@ export default function AppointmentCard({
 
       {/* Services */}
       <div className="mt-6">
-        <div className="mb-2 flex items-center gap-2 text-slate-500">
+        <div className="mb-2 flex items-center gap-2 text-muted-foreground">
           <Scissors className="h-4 w-4" />
           <span className="text-sm font-medium">Services</span>
         </div>
@@ -97,7 +97,7 @@ export default function AppointmentCard({
           {appointment.services.map((service) => (
             <span
               key={service.id}
-              className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+              className="rounded-lg bg-muted/60 px-3 py-1 text-xs font-medium text-foreground/80"
             >
               {service.name}
             </span>
@@ -107,15 +107,15 @@ export default function AppointmentCard({
 
       {/* Stylist */}
       <div className="mt-6 flex items-center gap-3">
-        <User className="h-4 w-4 text-slate-500" />
+        <User className="h-4 w-4 text-muted-foreground" />
 
         <div>
-          <p className="text-sm font-medium text-slate-900">
+          <p className="text-sm font-medium text-foreground">
             {appointment.stylist.name}
           </p>
 
           {appointment.stylist.designation && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               {appointment.stylist.designation}
             </p>
           )}
@@ -124,42 +124,42 @@ export default function AppointmentCard({
 
       {/* Schedule */}
       <div className="mt-6 grid grid-cols-2 gap-4">
-        <div className="rounded-2xl bg-slate-50 p-4">
-          <div className="flex items-center gap-2 text-slate-500">
+        <div className="rounded-2xl bg-muted/60 p-4">
+          <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4" />
             <span className="text-xs">Date</span>
           </div>
 
-          <p className="mt-2 text-sm font-semibold text-slate-900">
+          <p className="mt-2 text-sm font-semibold text-foreground">
             {appointment.schedule.date}
           </p>
         </div>
 
-        <div className="rounded-2xl bg-slate-50 p-4">
-          <div className="flex items-center gap-2 text-slate-500">
+        <div className="rounded-2xl bg-muted/60 p-4">
+          <div className="flex items-center gap-2 text-muted-foreground">
             <Clock3 className="h-4 w-4" />
             <span className="text-xs">Time</span>
           </div>
 
-          <p className="mt-2 text-sm font-semibold text-slate-900">
+          <p className="mt-2 text-sm font-semibold text-foreground">
             {appointment.schedule.time}
           </p>
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             {appointment.schedule.duration}
           </p>
         </div>
       </div>
 
       {/* Amount */}
-      <div className="mt-6 flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+      <div className="mt-6 flex items-center justify-between rounded-2xl bg-muted/60 p-4">
         <div className="flex items-center gap-2">
           <IndianRupee className="h-4 w-4 text-green-600" />
 
           <div>
-            <p className="text-xs text-slate-500">Amount</p>
+            <p className="text-xs text-muted-foreground">Amount</p>
 
-            <p className="font-semibold text-slate-900">
+            <p className="font-semibold text-foreground">
               ₹{appointment.payment.amount}
             </p>
           </div>
@@ -177,13 +177,13 @@ export default function AppointmentCard({
         
       </div>
             {/* Footer */}
-      <div className="mt-6 border-t border-slate-200 pt-5">
+      <div className="mt-6 border-t border-border pt-5">
 
         <div className="flex items-center justify-between">
 
           <AppointmentStatus status={appointment.status} />
 
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             {appointment.payment.status === "Paid"
               ? "Payment Completed"
               : "Awaiting Payment"}
@@ -203,7 +203,7 @@ export default function AppointmentCard({
               }
             }}
             disabled={!appointment.customer.phone}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="rounded-xl border border-border px-3 py-2 text-sm font-medium text-foreground/80 transition hover:bg-muted/60"
           >
             Call
           </button>
@@ -214,7 +214,7 @@ export default function AppointmentCard({
               e.stopPropagation();
               onClick?.(appointment);
             }}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="rounded-xl border border-border px-3 py-2 text-sm font-medium text-foreground/80 transition hover:bg-muted/60"
           >
             Edit
           </button>
@@ -239,22 +239,22 @@ export default function AppointmentCard({
 
 export function AppointmentCardSkeleton() {
   return (
-    <div className="animate-pulse rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="animate-pulse rounded-2xl border border-border bg-card p-5 shadow-sm">
 
       <div className="flex items-center gap-3">
-        <div className="h-12 w-12 rounded-full bg-slate-200" />
+        <div className="h-12 w-12 rounded-full bg-muted" />
 
         <div className="flex-1">
-          <div className="h-4 w-40 rounded bg-slate-200" />
-          <div className="mt-2 h-3 w-24 rounded bg-slate-100" />
+          <div className="h-4 w-40 rounded bg-muted" />
+          <div className="mt-2 h-3 w-24 rounded bg-muted/60" />
         </div>
       </div>
 
-      <div className="mt-6 h-20 rounded-2xl bg-slate-100" />
+      <div className="mt-6 h-20 rounded-2xl bg-muted/60" />
 
-      <div className="mt-4 h-20 rounded-2xl bg-slate-100" />
+      <div className="mt-4 h-20 rounded-2xl bg-muted/60" />
 
-      <div className="mt-4 h-16 rounded-2xl bg-slate-100" />
+      <div className="mt-4 h-16 rounded-2xl bg-muted/60" />
     </div>
   );
 }

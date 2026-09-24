@@ -6,6 +6,7 @@ import {
   publicSalon,
   publicServices,
 } from "../controllers/public-booking.controller";
+import { cancelPublicBooking, viewPublicBooking } from "../controllers/public-manage.controller";
 import { createPublicPaymentOrder, verifyPublicPayment } from "../controllers/public-payment.controller";
 import {
   requirePublicIntegration,
@@ -24,3 +25,5 @@ publicRouter.get("/availability", publicAvailability);
 publicRouter.post("/appointments", createPublicBooking);
 publicRouter.post("/appointments/:id/payment-order", createPublicPaymentOrder);
 publicRouter.post("/appointments/:id/payment-verify", verifyPublicPayment);
+publicRouter.get("/appointments/:id", viewPublicBooking);
+publicRouter.post("/appointments/:id/cancel", cancelPublicBooking);

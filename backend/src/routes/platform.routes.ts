@@ -7,22 +7,27 @@ import {
   getPlatformSettings,
   getSalon,
   listAuditLog,
+  listAuditLogCsv,
   listPlatformUsers,
   listSalons,
+  listSalonsCsv,
+  listSessions,
   listSubscriptions,
   platformOverview,
+  revokeSession,
+  revokeUserSessions,
   sendNotification,
   updatePlatformSettings,
   updatePlatformUser,
   updateSalon,
   listPlans, getPlan, createPlan, updatePlan, setPlanFeatures, listFeatures,
-  getSalonSubscription, createSubscription, updateSubscription, renewSubscription,
-  getSalonFeatureOverrides, setSalonFeatureOverride, getSalonWebsiteSettings, upsertSalonWebsiteSettings,
+  getSalonSubscription, createSubscription, updateSubscription, renewSubscription, cancelSubscription,
+  getSalonFeatureOverrides, setSalonFeatureOverride, getSalonWebsiteSettings, upsertSalonWebsiteSettings, verifySalonDomain, listWebsites, getSystemStatus,
 } from "../controllers/platform.controller";
 import { requirePlatformAdmin } from "../middleware/session.middleware";
 import { requirePlatformPermission } from "../middleware/session.middleware";
 import { createPlatformInvoice, listPlatformInvoices } from "../controllers/billing.controller";
-import { confirmTwoFactor, disableTwoFactor, listLoginHistory, startTwoFactor } from "../controllers/auth.controller";
+import { confirmTwoFactor, disableTwoFactor, impersonateSalon, listLoginHistory, startTwoFactor } from "../controllers/auth.controller";
 import { addTicketComment, createPlatformRole, createTicket, listPlatformRoles, listTickets, runBulkSalonUpdate, updatePlatformRole, updateTicket } from "../controllers/platform-operations.controller";
 import { financialReport, financialReportCsv } from "../controllers/reports.controller";
 
@@ -30,12 +35,13 @@ export const platformRouter = Router();
 platformRouter.use(requirePlatformAdmin);
 platformRouter.get("/overview", platformOverview);
 platformRouter.get("/salons", listSalons);
+platformRouter.get("/salons.csv", listSalonsCsv);
 platformRouter.get("/salons/:id", getSalon);
-platformRouter.post("/salons", createSalon);
-platformRouter.patch("/salons/:id", updateSalon);
-platformRouter.delete("/salons/:id", deleteSalon);
-platformRouter.post("/salons/:id/restore", restoreSalon);
-platformRouter.post("/notifications", sendNotification);
+platformRouter.post("/salons", requirePlatformPermission("SALON_MANAGEMENT"), createSalon);
+platformRouter.patch("/salons/:id", requirePlatformPermission("SALON_MANAGEMENT"), updateSalon);
+platformRouter.delete("/salons/:id", requirePlatformPermission("SALON_MANAGEMENT"), deleteSalon);
+platformRouter.post("/salons/:id/restore", requirePlatformPermission("SALON_MANAGEMENT"), restoreSalon);
+platformRouter.post("/notifications", requirePlatformPermission("SALON_MANAGEMENT"), sendNotification);
 platformRouter.get("/billing/invoices", requirePlatformPermission("BILLING"), listPlatformInvoices);
 platformRouter.post("/billing/invoices", requirePlatformPermission("BILLING"), createPlatformInvoice);
 platformRouter.post("/security/two-factor/start", requirePlatformPermission("SECURITY"), startTwoFactor);
@@ -55,6 +61,9 @@ platformRouter.get("/reports/financial.csv", requirePlatformPermission("REPORTIN
 platformRouter.get("/users", listPlatformUsers);
 platformRouter.post("/users", createPlatformUser);
 platformRouter.patch("/users/:id", updatePlatformUser);
+platformRouter.delete("/users/:id/sessions", requirePlatformPermission("SECURITY"), revokeUserSessions);
+platformRouter.get("/sessions", requirePlatformPermission("SECURITY"), listSessions);
+platformRouter.delete("/sessions/:id", requirePlatformPermission("SECURITY"), revokeSession);
 platformRouter.get("/subscriptions", listSubscriptions);
 platformRouter.get("/features", listFeatures);
 platformRouter.get("/plans", listPlans);
@@ -63,13 +72,19 @@ platformRouter.get("/plans/:id", getPlan);
 platformRouter.patch("/plans/:id", updatePlan);
 platformRouter.put("/plans/:id/features", setPlanFeatures);
 platformRouter.get("/salons/:id/subscription", getSalonSubscription);
-platformRouter.post("/salons/:id/subscription", createSubscription);
-platformRouter.patch("/salons/:id/subscription", updateSubscription);
-platformRouter.post("/salons/:id/subscription/renew", renewSubscription);
+platformRouter.post("/salons/:id/subscription", requirePlatformPermission("SALON_MANAGEMENT"), createSubscription);
+platformRouter.patch("/salons/:id/subscription", requirePlatformPermission("SALON_MANAGEMENT"), updateSubscription);
+platformRouter.post("/salons/:id/subscription/renew", requirePlatformPermission("SALON_MANAGEMENT"), renewSubscription);
+platformRouter.post("/salons/:id/subscription/cancel", requirePlatformPermission("SALON_MANAGEMENT"), cancelSubscription);
+platformRouter.post("/salons/:id/impersonate", requirePlatformPermission("SECURITY"), impersonateSalon);
 platformRouter.get("/salons/:id/features", getSalonFeatureOverrides);
-platformRouter.put("/salons/:id/features", setSalonFeatureOverride);
+platformRouter.put("/salons/:id/features", requirePlatformPermission("SALON_MANAGEMENT"), setSalonFeatureOverride);
+platformRouter.get("/websites", listWebsites);
+platformRouter.get("/system-status", requirePlatformPermission("SECURITY"), getSystemStatus);
 platformRouter.get("/salons/:id/website", getSalonWebsiteSettings);
-platformRouter.put("/salons/:id/website", upsertSalonWebsiteSettings);
-platformRouter.get("/audit-log", listAuditLog);
+platformRouter.put("/salons/:id/website", requirePlatformPermission("SALON_MANAGEMENT"), upsertSalonWebsiteSettings);
+platformRouter.post("/salons/:id/website/verify-domain", requirePlatformPermission("SALON_MANAGEMENT"), verifySalonDomain);
+platformRouter.get("/audit-log", requirePlatformPermission("SECURITY"), listAuditLog);
+platformRouter.get("/audit-log.csv", requirePlatformPermission("SECURITY"), listAuditLogCsv);
 platformRouter.get("/settings", getPlatformSettings);
 platformRouter.put("/settings", updatePlatformSettings);

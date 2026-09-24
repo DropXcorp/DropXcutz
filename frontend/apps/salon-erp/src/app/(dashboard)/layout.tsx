@@ -6,7 +6,7 @@ import ERPBootstrap from "@/src/components/erp/ERPBootstrap";
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <ERPBootstrap>
-      <div className="min-h-[100dvh] overflow-hidden bg-zinc-50">
+      <div className="min-h-[100dvh] overflow-hidden bg-muted/60">
         <div className="flex h-[100dvh] min-h-0">
           <div className="hidden shrink-0 lg:block"><AppSidebar /></div>
           <div className="flex min-w-0 flex-1 flex-col">

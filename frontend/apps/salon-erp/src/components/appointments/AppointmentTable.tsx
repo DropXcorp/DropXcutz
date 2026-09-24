@@ -58,6 +58,12 @@ export interface AppointmentTableItem {
 interface AppointmentTableProps {
   appointments: AppointmentTableItem[];
   loading?: boolean;
+  busyId?: string | null;
+  page?: number;
+  pageSize?: number;
+  total?: number;
+  onPageChange?: (page: number) => void;
+  onNoShow?: (appointment: AppointmentTableItem) => void;
   onRowClick?: (appointment: AppointmentTableItem) => void;
   onCreateAppointment?: () => void;
   onAssign?: (appointment: AppointmentTableItem) => void;
@@ -67,9 +73,22 @@ interface AppointmentTableProps {
   onCancel?: (appointment: AppointmentTableItem) => void;
 }
 
+const displayDate = (value: string) => {
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(parsed);
+};
+
 export default function AppointmentTable({
   appointments,
   loading = false,
+  busyId = null,
+  page = 1,
+  pageSize = 0,
+  total,
+  onPageChange,
+  onNoShow,
   onRowClick,
   onCreateAppointment,
   onAssign,
@@ -79,24 +98,24 @@ export default function AppointmentTable({
   onCancel,
 }: AppointmentTableProps) {
   return (
-    <div className="overflow-visible rounded-3xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-visible rounded-2xl border border-border bg-card shadow-sm">
       {/* Mobile / Tablet Responsive Layout */}
       <div className="p-4 xl:hidden">
         {loading ? (
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+              <div key={index} className="h-32 animate-pulse rounded-2xl bg-muted/60" />
             ))}
           </div>
         ) : appointments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
               <CalendarCheck2 className="h-8 w-8" />
             </div>
-            <h3 className="mt-4 text-lg font-semibold text-slate-900">
+            <h3 className="mt-4 text-lg font-semibold text-foreground">
               No Appointments Found
             </h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Try changing your search criteria or create a new appointment.
             </p>
           </div>
@@ -106,15 +125,15 @@ export default function AppointmentTable({
               <div
                 key={appointment.id}
                 onClick={() => onRowClick?.(appointment)}
-                className="cursor-pointer space-y-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 shadow-sm"
+                className="cursor-pointer space-y-3 rounded-2xl border border-border bg-card p-4 transition hover:border-border shadow-sm"
               >
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center justify-between border-b border-border pb-3">
                   <div className="flex items-center gap-3">
                     <div>
-                      <p className="font-semibold text-slate-900">
+                      <p className="font-semibold text-foreground">
                         {appointment.customer.name}
                       </p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {appointment.appointment.appointmentNumber}
                       </p>
                     </div>
@@ -124,21 +143,21 @@ export default function AppointmentTable({
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <p className="text-slate-400">Stylist</p>
-                    <p className="font-medium text-slate-800">{appointment.stylist.name}</p>
+                    <p className="text-muted-foreground">Stylist</p>
+                    <p className="font-medium text-foreground/80">{appointment.stylist.name}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400">Schedule</p>
-                    <p className="font-medium text-slate-800">
-                      {appointment.schedule.date} • {appointment.schedule.time}
+                    <p className="text-muted-foreground">Schedule</p>
+                    <p className="font-medium text-foreground/80">
+                      {displayDate(appointment.schedule.date)} • {appointment.schedule.time}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                  <p className="font-semibold text-slate-900">₹{appointment.payment.amount}</p>
+                <div className="flex items-center justify-between border-t border-border pt-3">
+                  <p className="font-semibold text-foreground">₹{appointment.payment.amount}</p>
                   <div onClick={(e) => e.stopPropagation()}>
-                    <AppointmentActions appointment={appointment} onEdit={onRowClick} onAssign={onAssign} onCheckIn={onCheckIn} onStart={onStart} onComplete={onComplete} onCancel={onCancel} />
+                    <AppointmentActions appointment={appointment} busy={busyId === appointment.id} onNoShow={onNoShow} onEdit={onRowClick} onAssign={onAssign} onCheckIn={onCheckIn} onStart={onStart} onComplete={onComplete} onCancel={onCancel} />
                   </div>
                 </div>
               </div>
@@ -148,10 +167,10 @@ export default function AppointmentTable({
       </div>
 
       {/* Desktop Responsive Table */}
-      <div className="hidden xl:block">
-        <table className="w-full table-fixed">
-          <thead className="sticky top-0 z-20 bg-slate-50">
-            <tr className="border-b border-slate-200">
+      <div className="hidden overflow-x-auto xl:block">
+        <table className="w-full min-w-[1100px] table-fixed">
+          <thead className="sticky top-0 z-20 bg-muted/60">
+            <tr className="border-b border-border">
               <TableHeading title="Customer" />
               <TableHeading title="Appointment" />
               <TableHeading title="Service" />
@@ -159,7 +178,7 @@ export default function AppointmentTable({
               <TableHeading title="Schedule" />
               <TableHeading title="Amount" />
               <TableHeading title="Status" />
-              <th className="px-3 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <th className="px-3 py-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Actions
               </th>
             </tr>
@@ -175,15 +194,15 @@ export default function AppointmentTable({
               <tr>
                 <td colSpan={8} className="py-24">
                   <div className="flex flex-col items-center justify-center">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
                       <CalendarCheck2 className="h-10 w-10" />
                     </div>
 
-                    <h3 className="mt-6 text-xl font-semibold text-slate-900">
+                    <h3 className="mt-6 text-xl font-semibold text-foreground">
                       No Appointments Found
                     </h3>
 
-                    <p className="mt-2 max-w-md text-center text-sm text-slate-500">
+                    <p className="mt-2 max-w-md text-center text-sm text-muted-foreground">
                       No appointments match the selected filters. Try changing your search
                       criteria or create a new appointment.
                     </p>
@@ -191,7 +210,7 @@ export default function AppointmentTable({
                     {onCreateAppointment && (
                       <button
                         onClick={onCreateAppointment}
-                        className="mt-8 rounded-xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700"
+                        className="mt-8 rounded-xl bg-primary px-6 py-3 font-medium text-primary-foreground transition hover:bg-primary/90"
                       >
                         + New Appointment
                       </button>
@@ -206,7 +225,7 @@ export default function AppointmentTable({
                 <tr
                   key={appointment.id}
                   onClick={() => onRowClick?.(appointment)}
-                  className="cursor-pointer border-b border-slate-100 transition-all duration-200 hover:bg-slate-50"
+                  className={`cursor-pointer border-b border-border transition-all duration-200 hover:bg-muted/60 ${busyId === appointment.id ? "pointer-events-none opacity-60" : ""}`}
                 >
                   {/* Customer */}
                   <td className="px-3 py-4">
@@ -227,7 +246,7 @@ export default function AppointmentTable({
                       )}
 
                       <div>
-                        <h4 className="truncate font-semibold text-slate-900">
+                        <h4 className="truncate font-semibold text-foreground">
                           {appointment.customer.name}
                         </h4>
 
@@ -243,7 +262,7 @@ export default function AppointmentTable({
                   {/* Appointment */}
                   <td className="px-3 py-4">
                     <div>
-                      <p className="font-semibold text-slate-900">
+                      <p className="font-semibold text-foreground">
                         {appointment.appointment.appointmentNumber}
                       </p>
 
@@ -265,14 +284,14 @@ export default function AppointmentTable({
                       {appointment.services.slice(0, 2).map((service) => (
                         <div
                           key={service.id}
-                          className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700"
+                          className="rounded-lg bg-muted/60 px-2 py-1 text-xs font-medium text-foreground/80"
                         >
                           {service.name}
                         </div>
                       ))}
 
                       {appointment.services.length > 2 && (
-                        <span className="text-xs font-medium text-blue-600">
+                        <span className="text-xs font-medium text-foreground/70">
                           +{appointment.services.length - 2} more
                         </span>
                       )}
@@ -298,12 +317,12 @@ export default function AppointmentTable({
                       )}
 
                       <div>
-                        <p className="truncate font-medium text-slate-900">
+                        <p className="truncate font-medium text-foreground">
                           {appointment.stylist.name}
                         </p>
 
                         {appointment.stylist.designation && (
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted-foreground">
                             {appointment.stylist.designation}
                           </p>
                         )}
@@ -314,15 +333,15 @@ export default function AppointmentTable({
                   {/* Schedule */}
                   <td className="px-3 py-4">
                     <div>
-                      <p className="font-medium text-slate-900">
-                        {appointment.schedule.date}
+                      <p className="font-medium text-foreground">
+                        {displayDate(appointment.schedule.date)}
                       </p>
 
-                      <p className="text-sm text-slate-500">
+                      <p className="text-sm text-muted-foreground">
                         {appointment.schedule.time}
                       </p>
 
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-muted-foreground">
                         {appointment.schedule.duration}
                       </p>
                     </div>
@@ -331,7 +350,7 @@ export default function AppointmentTable({
                   {/* Amount */}
                   <td className="px-3 py-4">
                     <div>
-                      <p className="font-semibold text-slate-900">
+                      <p className="font-semibold text-foreground">
                         ₹{appointment.payment.amount}
                       </p>
 
@@ -357,7 +376,7 @@ export default function AppointmentTable({
                     className="px-3 py-4 text-right"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <AppointmentActions appointment={appointment} onEdit={onRowClick} onAssign={onAssign} onCheckIn={onCheckIn} onStart={onStart} onComplete={onComplete} onCancel={onCancel} />
+                    <AppointmentActions appointment={appointment} busy={busyId === appointment.id} onNoShow={onNoShow} onEdit={onRowClick} onAssign={onAssign} onCheckIn={onCheckIn} onStart={onStart} onComplete={onComplete} onCancel={onCancel} />
                   </td>
                 </tr>
               ))}
@@ -366,28 +385,51 @@ export default function AppointmentTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex flex-col gap-4 border-t border-slate-200 bg-white px-6 py-5 md:flex-row md:items-center md:justify-between">
-        <div className="text-sm text-slate-500">
-          Showing
-          <span className="mx-1 font-semibold text-slate-900">
-            {appointments.length === 0 ? 0 : 1}–{appointments.length}
-          </span>
-          of
-          <span className="mx-1 font-semibold text-slate-900">
-            {appointments.length}
-          </span>
-          appointments
-        </div>
-
-        <p className="text-xs text-slate-400">All matching appointments are shown.</p>
-      </div>
+      {(() => {
+        const count = total ?? appointments.length;
+        const size = pageSize || Math.max(count, 1);
+        const pages = Math.max(1, Math.ceil(count / size));
+        const from = count === 0 ? 0 : (page - 1) * size + 1;
+        const to = Math.min(count, page * size);
+        return (
+          <div className="flex flex-col gap-3 border-t border-border bg-card px-6 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-muted-foreground">
+              Showing <span className="font-semibold text-foreground">{from}–{to}</span> of{" "}
+              <span className="font-semibold text-foreground">{count}</span> appointments
+            </div>
+            {pages > 1 && onPageChange && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => onPageChange(page - 1)}
+                  className="h-9 rounded-lg border border-border px-3 text-sm font-medium transition hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-muted-foreground">
+                  Page {page} of {pages}
+                </span>
+                <button
+                  type="button"
+                  disabled={page >= pages}
+                  onClick={() => onPageChange(page + 1)}
+                  className="h-9 rounded-lg border border-border px-3 text-sm font-medium transition hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
 function TableHeading({ title }: { title: string }) {
   return (
-    <th className="px-3 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+    <th className="px-3 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
       {title}
     </th>
   );
@@ -395,12 +437,12 @@ function TableHeading({ title }: { title: string }) {
 
 function TableSkeleton() {
   return (
-    <tr className="border-b border-slate-100">
+    <tr className="border-b border-border">
       {Array.from({ length: 8 }).map((_, index) => (
         <td key={index} className="px-3 py-4">
           <div className="animate-pulse">
-            <div className="h-4 w-24 rounded bg-slate-200" />
-            <div className="mt-2 h-3 w-16 rounded bg-slate-100" />
+            <div className="h-4 w-24 rounded bg-muted" />
+            <div className="mt-2 h-3 w-16 rounded bg-muted/60" />
           </div>
         </td>
       ))}

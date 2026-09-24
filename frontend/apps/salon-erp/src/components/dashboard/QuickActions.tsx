@@ -52,14 +52,14 @@ const actions = [
 export default function QuickActions() {
   const router = useRouter();
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <div className="rounded-2xl border border-border bg-card shadow-sm">
       {/* Header */}
-      <div className="border-b border-zinc-200 p-5">
-        <h2 className="text-lg font-semibold text-zinc-900">
+      <div className="border-b border-border p-5">
+        <h2 className="text-lg font-semibold text-foreground">
           Quick Actions
         </h2>
 
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Frequently used actions
         </p>
       </div>
@@ -73,17 +73,17 @@ export default function QuickActions() {
             <button
               key={action.title}
               onClick={() => router.push(action.href)}
-              className="group rounded-2xl border border-zinc-200 bg-zinc-50 p-5 text-left transition-all duration-200 hover:-translate-y-1 hover:border-black hover:bg-white hover:shadow-md"
+              className="group rounded-2xl border border-border bg-muted/60 p-5 text-left transition-all duration-200 hover:-translate-y-1 hover:border-black hover:bg-card hover:shadow-md"
             >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-black text-white transition-colors group-hover:bg-zinc-800">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-white transition-colors group-hover:bg-primary/90">
                 <Icon size={22} />
               </div>
 
-              <h3 className="font-semibold text-zinc-900">
+              <h3 className="font-semibold text-foreground">
                 {action.title}
               </h3>
 
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {action.description}
               </p>
             </button>

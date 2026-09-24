@@ -9,6 +9,7 @@ import {
   createRazorpayPaymentLink,
   verifyRazorpayWebhook,
 } from "../services/razorpay.service";
+import { sendEmail } from "../services/email.service";
 
 const invoiceInput = z.object({
   salonId: z.string().min(1),
@@ -86,6 +87,15 @@ export async function createPlatformInvoice(
       paymentUrl: paymentLink.short_url,
     },
   });
+  if (salon.adminEmail) {
+    void sendEmail({
+      to: salon.adminEmail,
+      subject: `Invoice ${saved.invoiceNumber} from DropXcutz`,
+      html: `<p>A new invoice for ${salon.salonName} is ready.</p>
+        <p>Amount due: ${saved.totalAmount} ${salon.currency}</p>
+        <p><a href="${saved.paymentUrl}">Pay this invoice</a></p>`,
+    }).catch((error) => console.error("Invoice email send failed", error));
+  }
   created(response, saved);
 }
 

@@ -1,5 +1,5 @@
-import { PaymentGatewaySettings } from "@/src/components/settings/IntegrationSettingsPanel";
+import PaymentsWizard from "@/src/components/settings/PaymentsWizard";
 
 export default function PaymentIntegrationPage() {
-  return <PaymentGatewaySettings />;
+  return <PaymentsWizard />;
 }

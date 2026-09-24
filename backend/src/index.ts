@@ -12,6 +12,8 @@ import { salonRouter } from "./routes/salon.routes";
 import { platformRouter } from "./routes/platform.routes";
 import { publicRouter } from "./routes/public.routes";
 import { publicSlugRouter } from "./routes/public-slug.routes";
+import { publicSitesRouter } from "./routes/public-sites.routes";
+import { logStartupConfig } from "./services/system-status.service";
 import { startScheduler } from "./services/scheduler.service";
 import { handleRazorpayWebhook } from "./controllers/billing.controller";
 import { handleSalonRazorpayWebhook } from "./controllers/public-payment.controller";
@@ -26,7 +28,16 @@ const limits = {
   password: isDevelopment ? 200 : 20,
   publicApi: isDevelopment ? 1_000 : 100,
   publicSlug: isDevelopment ? 500 : 40,
+  publicWrites: isDevelopment ? 500 : 20,
 };
+
+const publicWriteLimiter = rateLimit({
+  windowMs: 10 * 60_000,
+  limit: limits.publicWrites,
+  skip: (request) => request.method !== "POST",
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
 const origins = (
   process.env.FRONTEND_ORIGINS ??
   "http://localhost:3000,http://localhost:3001,http://localhost:3002"
@@ -107,10 +118,12 @@ app.get("/api/health", publicCors, async (_request, response) => {
 
 app.use("/api/erp", salonRouter);
 app.use("/api/platform", platformRouter);
-app.use("/api/v1/public", publicCors, publicRouter);
+app.use("/api/v1/public", publicCors, publicWriteLimiter, publicRouter);
+app.use("/api/public/v1/sites", publicCors, publicSitesRouter);
 app.use(
   "/api/public/v1/salons",
   publicCors,
+  publicWriteLimiter,
   rateLimit({
     windowMs: 15 * 60_000,
     limit: limits.publicSlug,
@@ -125,6 +138,7 @@ app.use(errorHandler);
 const server = app.listen(port, () =>
   console.info(`Salon API listening on http://localhost:${port}`),
 );
+void logStartupConfig();
 const stopScheduler = startScheduler();
 
 async function shutdown() {

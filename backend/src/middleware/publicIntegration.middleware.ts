@@ -1,6 +1,27 @@
 import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../config/prisma";
 import { ApiError } from "./error.middleware";
+import { hasFeature } from "../services/feature.service";
+
+/** Exact host match, or `*.example.com` wildcard (matches subdomains only, not the bare apex). */
+export function hostAllowed(allowed: string[], host: string) {
+  return allowed.some((entry) => {
+    const rule = entry.trim().toLowerCase();
+    if (rule.startsWith("*.")) return host.endsWith(rule.slice(1)) && host.length > rule.length - 1;
+    return rule === host;
+  });
+}
+
+let allowCache: { at: number; lists: string[][] } | undefined;
+async function activeAllowLists() {
+  if (allowCache && Date.now() - allowCache.at < 30_000) return allowCache.lists;
+  const rows = await prisma.salonIntegration.findMany({
+    where: { isActive: true, salon: { status: { in: ["ACTIVE", "TRIAL"] } } },
+    select: { allowedDomains: true },
+  });
+  allowCache = { at: Date.now(), lists: rows.map((row) => row.allowedDomains) };
+  return allowCache.lists;
+}
 
 function domainFromOrigin(origin: string) {
   try {
@@ -25,8 +46,14 @@ export async function requirePublicIntegration(request: Request, response: Respo
 
     const origin = request.header("origin");
     if (!origin) throw new ApiError(403, "An Origin header is required for public website requests.");
-    if (!integration.allowedDomains.includes(domainFromOrigin(origin)))
+    if (!hostAllowed(integration.allowedDomains, domainFromOrigin(origin)))
       throw new ApiError(403, "This domain is not allowed for this integration key.");
+
+    const site = await prisma.salonWebsiteSettings.findUnique({ where: { salonId: integration.salonId } });
+    if (site?.type !== "CUSTOM" || !site.isPublished)
+      throw new ApiError(403, "The custom website for this salon is not published.");
+    if (!(await hasFeature(integration.salonId, "CUSTOM_WEBSITE")) || !(await hasFeature(integration.salonId, "PUBLIC_API")))
+      throw new ApiError(403, "The public API is not included in this salon subscription.");
 
     response.locals.publicIntegration = integration;
     response.locals.salon = integration.salon;
@@ -42,18 +69,10 @@ export async function publicPreflight(request: Request, response: Response, next
     const origin = request.header("origin");
     if (!origin) return response.sendStatus(403);
     const allowedDomain = domainFromOrigin(origin);
-    const integration = await prisma.salonIntegration.findFirst({
-      where: {
-        isActive: true,
-        allowedDomains: { has: allowedDomain },
-        salon: { status: { in: ["ACTIVE", "TRIAL"] } },
-      },
-      select: { id: true },
-    });
-    if (!integration) return response.sendStatus(403);
+    if (!(await activeAllowLists()).some((list) => hostAllowed(list, allowedDomain))) return response.sendStatus(403);
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
-    response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-DropXcutz-Key");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-DropXcutz-Key, X-Booking-Token");
     response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     response.sendStatus(204);
   } catch (error) {
@@ -64,10 +83,10 @@ export async function publicPreflight(request: Request, response: Response, next
 export function publicCors(request: Request, response: Response, next: NextFunction) {
   const integration = response.locals.publicIntegration as { allowedDomains: string[] } | undefined;
   const origin = request.header("origin");
-  if (origin && integration && integration.allowedDomains.includes(domainFromOrigin(origin))) {
+  if (origin && integration && hostAllowed(integration.allowedDomains, domainFromOrigin(origin))) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
-    response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-DropXcutz-Key");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-DropXcutz-Key, X-Booking-Token");
     response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   }
   next();

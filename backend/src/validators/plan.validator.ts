@@ -27,6 +27,7 @@ export const planFeaturesInput = z.object({
 export const subscriptionInput = z.object({
   planId: z.string().min(1),
   status: z.enum(["TRIAL", "ACTIVE", "EXPIRED", "SUSPENDED", "CANCELLED"]),
+  billingCycle: z.enum(["MONTHLY", "ANNUAL"]).nullable().optional(),
   startsAt: z.coerce.date().optional(),
   expiresAt: z.coerce.date().nullable().optional(),
   monthlyPrice: money,

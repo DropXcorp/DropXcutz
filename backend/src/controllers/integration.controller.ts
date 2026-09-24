@@ -19,7 +19,7 @@ const domains = (value: unknown) => {
           .toLowerCase()
           .replace(/^https?:\/\//, "")
           .replace(/\/$/, "");
-        if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(domain))
+        if (!/^(?:\*\.)?[a-z0-9.-]+(?::\d{1,5})?$/.test(domain))
           throw new ApiError(400, "An allowed domain is invalid.");
         return domain;
       }),

@@ -10,6 +10,10 @@ import { created, ok } from "./http.controller";
 import { getEffectiveFeatures } from "../services/feature.service";
 import { planFeaturesInput, planInput, salonFeatureInput, subscriptionInput, websiteSettingsInput } from "../validators/plan.validator";
 import { notificationInput, platformSettingsInput, platformUserCreateInput, platformUserPatchInput } from "../validators/platform.validator";
+import { sendEmail } from "../services/email.service";
+import { toCsv } from "../services/csv.service";
+import { notifySiteChanged, verifyDomain } from "../services/domain-automation.service";
+import { describeWebsite, saveWebsiteSettings, setCustomDomain, websiteSettingsPatch } from "../services/website.service";
 
 export async function listSalons(_request: Request, response: Response) {
   const salons = await prisma.salon.findMany({
@@ -32,6 +36,30 @@ export async function listSalons(_request: Request, response: Response) {
       ),
     })),
   );
+}
+
+export async function listSalonsCsv(_request: Request, response: Response) {
+  const salons = await prisma.salon.findMany({
+    include: { invoices: { where: { status: "PAID" }, select: { totalAmount: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  const rows: Array<Array<string | number>> = [
+    ["Salon", "Code", "Status", "Plan", "Email", "City", "Trial ends", "Paid revenue", "Created"],
+    ...salons.map((salon) => [
+      salon.salonName,
+      salon.code,
+      salon.status,
+      salon.subscriptionPlan,
+      salon.email ?? "",
+      salon.city ?? "",
+      salon.trialEndsAt?.toISOString().slice(0, 10) ?? "",
+      salon.invoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount), 0),
+      salon.createdAt.toISOString().slice(0, 10),
+    ]),
+  ];
+  response.setHeader("content-type", "text/csv; charset=utf-8");
+  response.setHeader("content-disposition", `attachment; filename="dropxcutz-salons-${new Date().toISOString().slice(0, 10)}.csv"`);
+  response.send(toCsv(rows));
 }
 
 export async function getSalon(request: Request, response: Response) {
@@ -99,6 +127,16 @@ export async function createSalon(request: Request, response: Response) {
     item.id,
     { salonName: item.salonName, code: item.code },
   );
+  const erpUrl = process.env.SALON_ERP_URL?.trim();
+  void sendEmail({
+    to: normalizedAdminEmail,
+    subject: `Welcome to DropXcutz, ${item.salonName}`,
+    html: `<p>Your DropXcutz salon admin account is ready.</p>
+      <p>Salon: ${item.salonName} (${item.code})</p>
+      ${erpUrl ? `<p>ERP URL: <a href="${erpUrl}">${erpUrl}</a></p>` : ""}
+      <p>Email: ${normalizedAdminEmail}<br/>Temporary password: ${adminPassword}</p>
+      <p>You will be asked to change this password on first login.</p>`,
+  }).catch((error) => console.error("Welcome email send failed", error));
   created(response, { ...item, taxRate: Number(item.taxRate) });
 }
 
@@ -147,6 +185,31 @@ export async function updateSalon(request: Request, response: Response) {
       const currentSubscription = await tx.subscription.findFirst({ where: { salonId: id }, orderBy: { createdAt: "desc" } });
       if (currentSubscription) await tx.subscription.update({ where: { id: currentSubscription.id }, data: { planId: plan.id } });
       else await tx.subscription.create({ data: { salonId: id, planId: plan.id, status: updated.status === "TRIAL" ? "TRIAL" : "ACTIVE", expiresAt: updated.trialEndsAt } });
+    }
+    if (input.status === "ACTIVE") {
+      const hasLiveSubscription = await tx.subscription.findFirst({
+        where: { salonId: id, status: { in: ["ACTIVE", "TRIAL"] } },
+      });
+      if (!hasLiveSubscription) {
+        const lastSubscription = await tx.subscription.findFirst({
+          where: { salonId: id },
+          orderBy: { createdAt: "desc" },
+        });
+        const planId = lastSubscription?.planId ?? updated.planId;
+        if (!planId)
+          throw new ApiError(409, "Assign a subscription plan before activating this salon, or its subscription will expire again immediately.");
+        await tx.subscription.create({
+          data: {
+            salonId: id,
+            planId,
+            status: "ACTIVE",
+            billingCycle: lastSubscription?.billingCycle ?? null,
+            monthlyPrice: lastSubscription?.monthlyPrice ?? null,
+            annualPrice: lastSubscription?.annualPrice ?? null,
+            expiresAt: null,
+          },
+        });
+      }
     }
     return updated;
   });
@@ -236,7 +299,34 @@ export async function platformOverview(_request: Request, response: Response) {
 
   const totalRevenue = Number(invoicesAggregate._sum.totalAmount ?? 0);
 
+  const trendDays = 14;
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  since.setUTCDate(since.getUTCDate() - (trendDays - 1));
+  const [trendSalons, trendInvoices] = await Promise.all([
+    prisma.salon.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+    prisma.invoice.findMany({
+      where: { status: "PAID", issuedAt: { gte: since } },
+      select: { issuedAt: true, totalAmount: true },
+    }),
+  ]);
+  const trends = Array.from({ length: trendDays }, (_, index) => {
+    const day = new Date(since);
+    day.setUTCDate(since.getUTCDate() + index);
+    return { date: day.toISOString().slice(0, 10), newSalons: 0, revenue: 0 };
+  });
+  const trendByDate = new Map(trends.map((item) => [item.date, item]));
+  for (const salon of trendSalons) {
+    const bucket = trendByDate.get(salon.createdAt.toISOString().slice(0, 10));
+    if (bucket) bucket.newSalons += 1;
+  }
+  for (const invoice of trendInvoices) {
+    const bucket = trendByDate.get(invoice.issuedAt.toISOString().slice(0, 10));
+    if (bucket) bucket.revenue += Number(invoice.totalAmount);
+  }
+
   ok(response, {
+    trends,
     metrics: {
       totalSalons,
       activeSalons,
@@ -256,7 +346,7 @@ export async function platformOverview(_request: Request, response: Response) {
   });
 }
 
-const audit = (
+export const audit = (
   actorId: string | undefined,
   action: string,
   entity: string,
@@ -356,6 +446,63 @@ export async function updatePlatformUser(request: Request, response: Response) {
   ok(response, safe);
 }
 
+export async function revokeUserSessions(request: Request, response: Response) {
+  const id = String(request.params.id);
+  const user = await prisma.user.findUnique({ where: { id }, select: { id: true, name: true, email: true } });
+  if (!user) throw new ApiError(404, "User not found.");
+  const { count } = await prisma.session.deleteMany({ where: { userId: id } });
+  await audit(response.locals.user?.id, "USER_SESSIONS_REVOKED", "USER", id, { email: user.email, revokedCount: count });
+  ok(response, { revokedCount: count });
+}
+
+export async function listSessions(request: Request, response: Response) {
+  const impersonatedOnly = String(request.query.impersonatedOnly ?? "") === "true";
+  const sessions = await prisma.session.findMany({
+    where: {
+      expiresAt: { gt: new Date() },
+      ...(impersonatedOnly ? { impersonatedByUserId: { not: null } } : {}),
+    },
+    select: {
+      id: true,
+      userId: true,
+      createdAt: true,
+      expiresAt: true,
+      ipAddress: true,
+      impersonatedByUserId: true,
+      user: { select: { name: true, email: true, salon: { select: { salonName: true } } } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const adminIds = Array.from(new Set(sessions.map((s) => s.impersonatedByUserId).filter(Boolean))) as string[];
+  const admins = adminIds.length
+    ? await prisma.user.findMany({ where: { id: { in: adminIds } }, select: { id: true, name: true, email: true } })
+    : [];
+  const adminMap = new Map(admins.map((a) => [a.id, a]));
+
+  ok(
+    response,
+    sessions.map((session) => ({
+      ...session,
+      impersonatedBy: session.impersonatedByUserId
+        ? adminMap.get(session.impersonatedByUserId) ?? { name: "Platform admin", email: "" }
+        : null,
+    })),
+  );
+}
+
+export async function revokeSession(request: Request, response: Response) {
+  const id = String(request.params.id);
+  const session = await prisma.session.findUnique({ where: { id }, select: { id: true, userId: true, impersonatedByUserId: true } });
+  if (!session) throw new ApiError(404, "Session not found.");
+  await prisma.session.delete({ where: { id } });
+  await audit(response.locals.user?.id, "SESSION_REVOKED", "USER", session.userId, {
+    sessionId: id,
+    wasImpersonation: !!session.impersonatedByUserId,
+  });
+  response.status(204).end();
+}
+
 export async function listSubscriptions(_request: Request, response: Response) {
   const salons = await prisma.salon.findMany({
     select: {
@@ -396,6 +543,32 @@ export async function listAuditLog(_request: Request, response: Response) {
       actor: log.actorId ? actorMap.get(log.actorId) ?? { name: "Admin", email: "" } : { name: "System", email: "" },
     })),
   );
+}
+
+export async function listAuditLogCsv(_request: Request, response: Response) {
+  const logs = await prisma.platformAuditLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 2000,
+  });
+  const actorIds = Array.from(new Set(logs.map((l) => l.actorId).filter(Boolean))) as string[];
+  const actors = actorIds.length
+    ? await prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true, email: true } })
+    : [];
+  const actorMap = new Map(actors.map((a) => [a.id, a]));
+  const rows: Array<Array<string | number>> = [
+    ["Timestamp", "Actor", "Action", "Entity", "Entity ID", "Details"],
+    ...logs.map((log) => [
+      log.createdAt.toISOString(),
+      log.actorId ? (actorMap.get(log.actorId)?.name ?? "Admin") : "System",
+      log.action,
+      log.entity,
+      log.entityId ?? "",
+      log.details ? JSON.stringify(log.details) : "",
+    ]),
+  ];
+  response.setHeader("content-type", "text/csv; charset=utf-8");
+  response.setHeader("content-disposition", `attachment; filename="dropxcutz-audit-log-${new Date().toISOString().slice(0, 10)}.csv"`);
+  response.send(toCsv(rows));
 }
 
 export async function getPlatformSettings(
@@ -534,6 +707,19 @@ export async function renewSubscription(request: Request, response: Response) {
   created(response, subscription);
 }
 
+export async function cancelSubscription(request: Request, response: Response) {
+  const salonId = String(request.params.id);
+  const current = await prisma.subscription.findFirst({ where: { salonId }, orderBy: { createdAt: "desc" } });
+  if (!current) throw new ApiError(404, "Subscription not found.");
+  const subscription = await prisma.$transaction(async (tx) => {
+    const cancelled = await tx.subscription.update({ where: { id: current.id }, data: { status: "CANCELLED", expiresAt: new Date() } });
+    await tx.salon.update({ where: { id: salonId }, data: { status: "SUSPENDED" } });
+    return cancelled;
+  });
+  await audit(response.locals.user?.id, "SUBSCRIPTION_CANCELLED", "SUBSCRIPTION", subscription.id, { salonId });
+  ok(response, subscription);
+}
+
 export async function getSalonFeatureOverrides(request: Request, response: Response) {
   const salonId = String(request.params.id);
   ok(response, await getEffectiveFeatures(salonId));
@@ -544,19 +730,85 @@ export async function setSalonFeatureOverride(request: Request, response: Respon
   const feature = await prisma.feature.findUnique({ where: { code } }); if (!feature) throw new ApiError(404, "Feature not found.");
   await prisma.salonFeature.upsert({ where: { salonId_featureId: { salonId, featureId: feature.id } }, create: { salonId, featureId: feature.id, enabled }, update: { enabled } });
   await audit(response.locals.user?.id, "FEATURE_OVERRIDE_SET", "SALON", salonId, { code, enabled });
+  await syncWebsiteWithFeature(salonId, code, enabled);
   ok(response, await getEffectiveFeatures(salonId));
 }
 
+/** Granting a website feature pre-creates a draft site; revoking one takes the live site offline. */
+async function syncWebsiteWithFeature(salonId: string, code: string, enabled: boolean) {
+  const websiteCodes = ["TEMPLATE_WEBSITE", "CUSTOM_WEBSITE", "ONLINE_BOOKING"];
+  if (!websiteCodes.includes(code)) return;
+  const existing = await prisma.salonWebsiteSettings.findUnique({ where: { salonId } });
+  if (enabled && code === "TEMPLATE_WEBSITE" && !existing) {
+    const salon = await prisma.salon.findUniqueOrThrow({ where: { id: salonId }, select: { salonName: true } });
+    await prisma.salonWebsiteSettings.create({ data: { salonId, type: "TEMPLATE", templateId: "classic", title: salon.salonName, isPublished: false } });
+  }
+  if (!enabled && existing?.isPublished) {
+    await prisma.salonWebsiteSettings.update({ where: { salonId }, data: { isPublished: false } });
+    void notifySiteChanged();
+  }
+}
+
 export async function getSalonWebsiteSettings(request: Request, response: Response) {
-  ok(response, await prisma.salonWebsiteSettings.findUnique({ where: { salonId: String(request.params.id) } }));
+  ok(response, await describeWebsite(String(request.params.id)));
 }
 
 export async function upsertSalonWebsiteSettings(request: Request, response: Response) {
-  const salonId = String(request.params.id); const input = websiteSettingsInput.parse(request.body);
-  const { theme, ...rest } = input;
-  const data = { ...rest, ...(theme !== undefined ? { theme: JSON.parse(JSON.stringify(theme)) } : {}) };
-  const website = await prisma.salonWebsiteSettings.upsert({ where: { salonId }, create: { salonId, ...data }, update: data });
-  await audit(response.locals.user?.id, "WEBSITE_SETTINGS_UPDATED", "SALON", salonId, { type: input.type });
-  ok(response, website);
+  const salonId = String(request.params.id);
+  await prisma.salon.findUniqueOrThrow({ where: { id: salonId }, select: { id: true } });
+  const body = (request.body ?? {}) as { customDomain?: string | null };
+  const input = websiteSettingsPatch.parse(request.body);
+  await saveWebsiteSettings(salonId, input);
+  if (body.customDomain !== undefined) await setCustomDomain(salonId, body.customDomain);
+  await audit(response.locals.user?.id, "WEBSITE_SETTINGS_UPDATED", "SALON", salonId, {
+    type: input.type,
+    isPublished: input.isPublished,
+    customDomain: body.customDomain,
+  });
+  void notifySiteChanged();
+  ok(response, await describeWebsite(salonId));
 }
 
+export async function verifySalonDomain(request: Request, response: Response) {
+  const salonId = String(request.params.id);
+  await verifyDomain(salonId);
+  await audit(response.locals.user?.id, "WEBSITE_DOMAIN_VERIFY_REQUESTED", "SALON", salonId);
+  ok(response, await describeWebsite(salonId));
+}
+
+
+export async function listWebsites(_request: Request, response: Response) {
+  const rows = await prisma.salonWebsiteSettings.findMany({
+    include: { salon: { select: { id: true, salonName: true, code: true, slug: true, status: true } } },
+    orderBy: { updatedAt: "desc" },
+  });
+  const root = process.env.PUBLIC_ROOT_DOMAIN?.trim();
+  const scheme = process.env.NODE_ENV === "production" ? "https" : "http";
+  ok(
+    response,
+    rows.map((row) => {
+      const custom = row.customDomain && row.domainStatus === "ACTIVE" ? `https://${row.customDomain}` : null;
+      const subdomain = root ? `${scheme}://${row.salon.slug}.${root}` : null;
+      return {
+        salonId: row.salonId,
+        salonName: row.salon.salonName,
+        code: row.salon.code,
+        slug: row.salon.slug,
+        salonStatus: row.salon.status,
+        type: row.type,
+        isPublished: row.isPublished,
+        publishedAt: row.publishedAt,
+        customDomain: row.customDomain,
+        domainStatus: row.domainStatus,
+        domainError: row.domainError,
+        liveUrl: row.isPublished ? (custom ?? subdomain) : null,
+        updatedAt: row.updatedAt,
+      };
+    }),
+  );
+}
+
+export async function getSystemStatus(_request: Request, response: Response) {
+  const { collectSystemStatus } = await import("../services/system-status.service");
+  ok(response, await collectSystemStatus());
+}

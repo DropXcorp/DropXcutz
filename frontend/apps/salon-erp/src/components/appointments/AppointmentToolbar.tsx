@@ -51,17 +51,19 @@ export default function AppointmentToolbar({
   exportAction,
 }: AppointmentToolbarProps) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
 
         <input
+          type="search"
+          aria-label="Search appointments"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search customer, phone or appointment ID..."
-          className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
+          className="h-11 w-full rounded-xl border border-border bg-muted/40 pl-12 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:bg-card"
         />
       </div>
 
@@ -95,7 +97,7 @@ export default function AppointmentToolbar({
 
         <button
           onClick={onReset}
-          className="ml-auto inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+          className="ml-auto inline-flex h-11 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-foreground/70 transition hover:bg-muted/60"
         >
           <RotateCcw className="h-4 w-4" />
           Reset
@@ -124,15 +126,16 @@ function Select({
   return (
     <div className="relative">
       {icon && (
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
           {icon}
         </div>
       )}
 
       <select
+        aria-label={options[0]?.label ?? "Filter"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`h-11 appearance-none rounded-xl border border-slate-200 bg-white px-4 pr-10 text-sm font-medium outline-none transition hover:border-slate-300 focus:border-blue-500 ${
+        className={`h-11 appearance-none rounded-xl border border-border bg-card px-4 pr-10 text-sm font-medium outline-none transition hover:border-ring ${
           icon ? "pl-9" : ""
         }`}
       >
@@ -143,7 +146,7 @@ function Select({
         ))}
       </select>
 
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
     </div>
   );
 }
