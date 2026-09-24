@@ -1,6 +1,6 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -183,6 +183,7 @@ export default function AdminApp() {
   const [auth, setAuth] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [sectionLoading, setSectionLoading] = useState(false);
+  const hasInitialOverview = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionLabel, setActionLabel] = useState("");
   const [systemChecks, setSystemChecks] = useState<SystemCheck[] | null>(null);
@@ -237,7 +238,10 @@ export default function AdminApp() {
         api<OverviewData>("/api/platform/overview").catch(() => null),
       ]);
       setSalons(salonList || []);
-      if (overviewData) setOverview(overviewData);
+      if (overviewData) {
+        setOverview(overviewData);
+        hasInitialOverview.current = true;
+      }
       setAuth(true);
       setError("");
     } catch (e) {
@@ -280,6 +284,10 @@ export default function AdminApp() {
     if (!auth) return;
 
     if (section === "Overview") {
+      if (hasInitialOverview.current) {
+        hasInitialOverview.current = false;
+        return;
+      }
       const refresh = (silent: boolean) => {
         if (!silent) setSectionLoading(true);
         return api<OverviewData>("/api/platform/overview")
