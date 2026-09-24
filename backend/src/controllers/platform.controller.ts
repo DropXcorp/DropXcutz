@@ -16,24 +16,30 @@ import { notifySiteChanged, verifyDomain } from "../services/domain-automation.s
 import { describeWebsite, saveWebsiteSettings, setCustomDomain, websiteSettingsPatch } from "../services/website.service";
 
 export async function listSalons(_request: Request, response: Response) {
-  const salons = await prisma.salon.findMany({
-    include: {
-      _count: {
-        select: { customers: true, employees: true, appointments: true },
+  const [salons, revenueBySalon] = await Promise.all([
+    prisma.salon.findMany({
+      include: {
+        _count: {
+          select: { customers: true, employees: true, appointments: true },
+        },
       },
-      invoices: { where: { status: "PAID" }, select: { totalAmount: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.invoice.groupBy({
+      by: ["salonId"],
+      where: { status: "PAID" },
+      _sum: { totalAmount: true },
+    }),
+  ]);
+  const revenue = new Map(
+    revenueBySalon.map((item) => [item.salonId, Number(item._sum.totalAmount ?? 0)]),
+  );
   ok(
     response,
-    salons.map(({ invoices, razorpayKeySecretCipher: _keySecret, razorpayWebhookCipher: _webhookSecret, ...salon }) => ({
+    salons.map(({ razorpayKeySecretCipher: _keySecret, razorpayWebhookCipher: _webhookSecret, ...salon }) => ({
       ...salon,
       taxRate: Number(salon.taxRate),
-      paidRevenue: invoices.reduce(
-        (sum, invoice) => sum + Number(invoice.totalAmount),
-        0,
-      ),
+      paidRevenue: revenue.get(salon.id) ?? 0,
     })),
   );
 }
@@ -271,6 +277,7 @@ export async function platformOverview(_request: Request, response: Response) {
     invoicesAggregate,
     recentSalons,
     recentAudit,
+    recentRevenue,
   ] = await Promise.all([
     prisma.salon.count(),
     prisma.salon.count({ where: { status: "ACTIVE" } }),
@@ -286,7 +293,6 @@ export async function platformOverview(_request: Request, response: Response) {
     prisma.salon.findMany({
       include: {
         _count: { select: { customers: true, appointments: true } },
-        invoices: { where: { status: "PAID" }, select: { totalAmount: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 8,
@@ -295,9 +301,17 @@ export async function platformOverview(_request: Request, response: Response) {
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
+    prisma.invoice.groupBy({
+      by: ["salonId"],
+      where: { status: "PAID" },
+      _sum: { totalAmount: true },
+    }),
   ]);
 
   const totalRevenue = Number(invoicesAggregate._sum.totalAmount ?? 0);
+  const recentRevenueBySalon = new Map(
+    recentRevenue.map((item) => [item.salonId, Number(item._sum.totalAmount ?? 0)]),
+  );
 
   const trendDays = 14;
   const since = new Date();
@@ -337,10 +351,10 @@ export async function platformOverview(_request: Request, response: Response) {
       totalAppointments,
       totalRevenue,
     },
-    salons: recentSalons.map(({ invoices, razorpayKeySecretCipher: _keySecret, razorpayWebhookCipher: _webhookSecret, ...salon }) => ({
+    salons: recentSalons.map(({ razorpayKeySecretCipher: _keySecret, razorpayWebhookCipher: _webhookSecret, ...salon }) => ({
       ...salon,
       taxRate: Number(salon.taxRate),
-      paidRevenue: invoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0),
+      paidRevenue: recentRevenueBySalon.get(salon.id) ?? 0,
     })),
     recentAudit,
   });

@@ -1345,19 +1345,28 @@ export function WebsitesView({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const shown = items.filter((site) => {
+  // Older settings rows can be incomplete. Normalize API data at the UI
+  // boundary so one missing optional value cannot crash the whole panel.
+  const websites = items.map((site) => ({
+    ...site,
+    salonName: site.salonName ?? "Unnamed salon",
+    slug: site.slug ?? "",
+    type: site.type ?? "NONE",
+    domainStatus: site.domainStatus ?? "NONE",
+  }));
+  const shown = websites.filter((site) => {
     const q = query.trim().toLowerCase();
     const matches = !q || site.salonName.toLowerCase().includes(q) || site.slug.includes(q) || (site.customDomain ?? "").includes(q);
     const state = filter === "all" || (filter === "live" && site.isPublished) || (filter === "draft" && !site.isPublished && site.type !== "NONE") || (filter === "domain" && site.domainStatus !== "NONE" && site.domainStatus !== "ACTIVE");
     return matches && state;
   });
-  const live = items.filter((site) => site.isPublished).length;
+  const live = websites.filter((site) => site.isPublished).length;
   const statusCard = <SystemStatusCard checks={checks ?? null} />;
-  const attention = items.filter((site) => site.domainStatus === "FAILED" || site.domainStatus === "PENDING_DNS").length;
+  const attention = websites.filter((site) => site.domainStatus === "FAILED" || site.domainStatus === "PENDING_DNS").length;
   return (
     <div className="space-y-5">
     {statusCard}
-    <Panel title="Salon websites" subtitle={`${live} live · ${items.length} configured · ${attention} domain${attention === 1 ? "" : "s"} need attention`}>
+    <Panel title="Salon websites" subtitle={`${live} live · ${websites.length} configured · ${attention} domain${attention === 1 ? "" : "s"} need attention`}>
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/40 p-4 sm:px-6">
         <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
           <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
@@ -1373,7 +1382,7 @@ export function WebsitesView({
       <Table
         head={["Salon", "Type", "Status", "Address", "Domain", ""]}
         loading={loading}
-        empty={!shown.length ? { title: "No websites", message: items.length ? "No sites match this filter." : "Websites appear here once a salon sets one up." } : undefined}
+        empty={!shown.length ? { title: "No websites", message: websites.length ? "No sites match this filter." : "Websites appear here once a salon sets one up." } : undefined}
       >
         {shown.map((site) => (
           <tr key={site.salonId} className="transition hover:bg-muted/40">

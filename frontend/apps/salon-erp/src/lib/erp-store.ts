@@ -583,20 +583,26 @@ export const useERPStore = create<ERPState>((set, get) => ({
         loading: false,
         hydrated: true,
       });
-      // Background load auxiliary modules
-      void get().fetchBranches();
-      void get().fetchExpenses();
-      void get().fetchAttendance();
-      void get().fetchSuppliers();
-      void get().fetchPackages();
-      void get().fetchMemberships();
-      void get().fetchCoupons();
-      void get().fetchReviews();
-      void get().fetchPurchaseOrders();
-      if (snapshot.features.includes("WEBSITE_MANAGEMENT"))
-        void get().fetchWebsiteSettings();
-      if (snapshot.features.includes("API_INTEGRATIONS"))
-        void get().fetchIntegration();
+      // Allow React to paint the primary dashboard before optional modules
+      // compete for the local API connection pool.
+      window.setTimeout(() => {
+        const auxiliaryLoads: Promise<void>[] = [
+          get().fetchBranches(),
+          get().fetchExpenses(),
+          get().fetchAttendance(),
+          get().fetchSuppliers(),
+          get().fetchPackages(),
+          get().fetchMemberships(),
+          get().fetchCoupons(),
+          get().fetchReviews(),
+          get().fetchPurchaseOrders(),
+        ];
+        if (snapshot.features.includes("WEBSITE_MANAGEMENT"))
+          auxiliaryLoads.push(get().fetchWebsiteSettings());
+        if (snapshot.features.includes("API_INTEGRATIONS"))
+          auxiliaryLoads.push(get().fetchIntegration());
+        void Promise.allSettled(auxiliaryLoads);
+      }, 0);
     } catch (error) {
       set({ loading: false, error: message(error) });
     }
