@@ -9,16 +9,16 @@ export default function AppointmentDetails() {
   >("Walk-in");
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-border bg-card shadow-sm">
 
       {/* Header */}
 
-      <div className="border-b border-zinc-200 px-5 py-4">
-        <h3 className="text-lg font-semibold text-zinc-900">
+      <div className="border-b border-border px-5 py-4">
+        <h3 className="text-lg font-semibold text-foreground">
           Appointment Details
         </h3>
 
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Select the appointment schedule and booking source.
         </p>
       </div>
@@ -28,12 +28,12 @@ export default function AppointmentDetails() {
         {/* Date */}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Appointment Date
           </label>
 
-          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 transition focus-within:border-black">
-            <CalendarDays className="h-5 w-5 text-zinc-500" />
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4 py-3 transition focus-within:border-black">
+            <CalendarDays className="h-5 w-5 text-muted-foreground" />
 
             <input
               type="date"
@@ -45,12 +45,12 @@ export default function AppointmentDetails() {
         {/* Time */}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Appointment Time
           </label>
 
-          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 transition focus-within:border-black">
-            <Clock3 className="h-5 w-5 text-zinc-500" />
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4 py-3 transition focus-within:border-black">
+            <Clock3 className="h-5 w-5 text-muted-foreground" />
 
             <input
               type="time"
@@ -62,13 +62,13 @@ export default function AppointmentDetails() {
         {/* Duration */}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Duration
           </label>
 
-          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4 py-3">
 
-            <Timer className="h-5 w-5 text-zinc-500" />
+            <Timer className="h-5 w-5 text-muted-foreground" />
 
             <select className="w-full border-0 bg-transparent outline-none">
 
@@ -87,11 +87,11 @@ export default function AppointmentDetails() {
         {/* Status */}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Status
           </label>
 
-          <select className="h-12 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 outline-none transition focus:border-black">
+          <select className="h-12 w-full rounded-xl border border-border bg-muted/60 px-4 outline-none transition focus:border-black">
 
             <option>Booked</option>
             <option>Confirmed</option>
@@ -105,9 +105,9 @@ export default function AppointmentDetails() {
 
       {/* Booking Source */}
 
-      <div className="border-t border-zinc-200 p-5">
+      <div className="border-t border-border p-5">
 
-        <label className="mb-4 block text-sm font-medium text-zinc-700">
+        <label className="mb-4 block text-sm font-medium text-foreground/80">
           Booking Source
         </label>
 
@@ -120,17 +120,17 @@ export default function AppointmentDetails() {
             onClick={() => setBookingSource("Walk-in")}
             className={`rounded-2xl border p-5 text-left transition ${
               bookingSource === "Walk-in"
-                ? "border-black bg-zinc-100"
-                : "border-zinc-200 hover:bg-zinc-50"
+                ? "border-black bg-muted/60"
+                : "border-border hover:bg-muted/60"
             }`}
           >
-            <Store className="h-7 w-7 text-zinc-700" />
+            <Store className="h-7 w-7 text-foreground/80" />
 
-            <h4 className="mt-4 font-semibold text-zinc-900">
+            <h4 className="mt-4 font-semibold text-foreground">
               Walk-in
             </h4>
 
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               Customer visited the salon directly.
             </p>
           </button>
@@ -142,17 +142,17 @@ export default function AppointmentDetails() {
             onClick={() => setBookingSource("Online")}
             className={`rounded-2xl border p-5 text-left transition ${
               bookingSource === "Online"
-                ? "border-black bg-zinc-100"
-                : "border-zinc-200 hover:bg-zinc-50"
+                ? "border-black bg-muted/60"
+                : "border-border hover:bg-muted/60"
             }`}
           >
-            <Globe className="h-7 w-7 text-zinc-700" />
+            <Globe className="h-7 w-7 text-foreground/80" />
 
-            <h4 className="mt-4 font-semibold text-zinc-900">
+            <h4 className="mt-4 font-semibold text-foreground">
               Online Booking
             </h4>
 
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               Appointment booked through website or app.
             </p>
           </button>

@@ -25,17 +25,17 @@ export default function PaymentSection() {
   }, [payable, advance]);
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-border bg-card shadow-sm">
 
       {/* Header */}
 
-      <div className="border-b border-zinc-200 px-5 py-4">
+      <div className="border-b border-border px-5 py-4">
 
-        <h3 className="text-lg font-semibold text-zinc-900">
+        <h3 className="text-lg font-semibold text-foreground">
           Payment Details
         </h3>
 
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Configure payment information for this appointment.
         </p>
 
@@ -47,14 +47,14 @@ export default function PaymentSection() {
 
         <div>
 
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Payment Status
           </label>
 
           <select
             value={paymentStatus}
             onChange={(e) => setPaymentStatus(e.target.value)}
-            className="h-12 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 outline-none focus:border-black"
+            className="h-12 w-full rounded-xl border border-border bg-muted/60 px-4 outline-none focus:border-black"
           >
             <option>Pending</option>
             <option>Partial</option>
@@ -67,13 +67,13 @@ export default function PaymentSection() {
 
         <div>
 
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Payment Method
           </label>
 
-          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4">
 
-            <CreditCard className="h-5 w-5 text-zinc-500" />
+            <CreditCard className="h-5 w-5 text-muted-foreground" />
 
             <select
               value={paymentMethod}
@@ -95,13 +95,13 @@ export default function PaymentSection() {
 
         <div>
 
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Discount
           </label>
 
-          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4">
 
-            <Percent className="h-5 w-5 text-zinc-500" />
+            <Percent className="h-5 w-5 text-muted-foreground" />
 
             <input
               type="number"
@@ -119,13 +119,13 @@ export default function PaymentSection() {
 
         <div>
 
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Advance Paid
           </label>
 
-          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4">
 
-            <IndianRupee className="h-5 w-5 text-zinc-500" />
+            <IndianRupee className="h-5 w-5 text-muted-foreground" />
 
             <input
               type="number"
@@ -142,7 +142,7 @@ export default function PaymentSection() {
 
       {/* Summary */}
 
-      <div className="border-t border-zinc-200 bg-zinc-50 p-5">
+      <div className="border-t border-border bg-muted/60 p-5">
 
         <div className="space-y-3">
 
@@ -179,9 +179,9 @@ export default function PaymentSection() {
 
       {/* Coupon */}
 
-      <div className="border-t border-zinc-200 p-5">
+      <div className="border-t border-border p-5">
 
-        <label className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-700">
+        <label className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground/80">
 
           <Receipt className="h-4 w-4" />
 
@@ -193,10 +193,10 @@ export default function PaymentSection() {
 
           <input
             placeholder="Enter coupon"
-            className="h-12 flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-4 outline-none focus:border-black"
+            className="h-12 flex-1 rounded-xl border border-border bg-muted/60 px-4 outline-none focus:border-black"
           />
 
-          <button className="rounded-xl bg-black px-5 text-sm font-medium text-white hover:bg-zinc-800">
+          <button className="rounded-xl bg-primary px-5 text-sm font-medium text-white hover:bg-primary/90">
             Apply
           </button>
 
@@ -224,7 +224,7 @@ function SummaryRow({
   return (
     <div className="flex items-center justify-between">
 
-      <span className="text-sm text-zinc-600">
+      <span className="text-sm text-foreground/70">
         {label}
       </span>
 
@@ -233,8 +233,8 @@ function SummaryRow({
           highlight
             ? "text-lg font-bold text-green-600"
             : bold
-            ? "font-semibold text-zinc-900"
-            : "font-medium text-zinc-800"
+            ? "font-semibold text-foreground"
+            : "font-medium text-foreground/80"
         }`}
       >
         {value}

@@ -14,25 +14,25 @@ const money = (value: number) =>
 export default function RecentCustomers() {
   const { customers, appointments } = useERPStore();
   return (
-    <section className="flex h-[560px] flex-col rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-zinc-200 p-5">
+    <section className="flex h-[560px] flex-col rounded-2xl border border-border bg-card shadow-sm">
+      <div className="flex items-center justify-between border-b border-border p-5">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">
+          <h2 className="text-lg font-semibold text-foreground">
             Recent Customers
           </h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Latest customer profiles and visits
           </p>
         </div>
         <Link
           href="/customers"
-          className="flex items-center gap-1 text-sm font-medium text-zinc-600 hover:text-black"
+          className="flex items-center gap-1 text-sm font-medium text-foreground/70 hover:text-foreground"
         >
           View All
           <ChevronRight size={16} />
         </Link>
       </div>
-      <div className="flex-1 divide-y divide-zinc-100 overflow-y-auto">
+      <div className="flex-1 divide-y divide-border overflow-y-auto">
         {customers.slice(0, 8).map((customer) => {
           const visit = appointments.find(
             (item) => item.customer.id === customer.id,
@@ -40,10 +40,10 @@ export default function RecentCustomers() {
           return (
             <div
               key={customer.id}
-              className="flex items-center justify-between gap-4 p-5 transition hover:bg-zinc-50"
+              className="flex items-center justify-between gap-4 p-5 transition hover:bg-muted/60"
             >
               <div className="flex min-w-0 items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-900 font-semibold text-white">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary font-semibold text-white">
                   {customer.name
                     .split(" ")
                     .map((word) => word[0])
@@ -51,14 +51,14 @@ export default function RecentCustomers() {
                     .slice(0, 2)}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="truncate font-semibold text-zinc-900">
+                  <h3 className="truncate font-semibold text-foreground">
                     {customer.name}
                   </h3>
-                  <div className="mt-1 flex items-center gap-2 text-sm text-zinc-500">
+                  <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                     <Phone size={14} />
                     {customer.phone}
                   </div>
-                  <p className="mt-1 truncate text-xs text-zinc-400">
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
                     {visit
                       ? `Last booking: ${visit.services.map((item) => item.name).join(", ")}`
                       : "No appointments yet"}

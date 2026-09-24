@@ -40,6 +40,21 @@ enum WebsiteType {
   CUSTOM
 }
 
+enum DomainStatus {
+  NONE
+  PENDING_DNS
+  VERIFYING
+  ACTIVE
+  FAILED
+}
+
+enum AutomationJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
 enum SubscriptionStatus {
   TRIAL
   ACTIVE
@@ -373,9 +388,34 @@ model SalonWebsiteSettings {
   description  String?
   customDomain String?     @db.VarChar(253)
   theme        Json?
+  isPublished  Boolean     @default(false)
+  publishedAt  DateTime?
+  templateId   String?     @db.VarChar(40)
+  domainStatus            DomainStatus @default(NONE)
+  domainVerificationToken String?      @db.VarChar(80)
+  domainVerifiedAt        DateTime?
+  domainError             String?      @db.VarChar(300)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   salon        Salon       @relation(fields: [salonId], references: [id], onDelete: Cascade)
+
+  @@unique([customDomain])
+}
+
+model AutomationJob {
+  id        String              @id @default(cuid())
+  type      String              @db.VarChar(60)
+  runAt     DateTime            @default(now())
+  payload   Json?
+  status    AutomationJobStatus @default(PENDING)
+  attempts  Int                 @default(0)
+  lockedAt  DateTime?
+  lastError String?             @db.VarChar(500)
+  dedupeKey String?             @unique @db.VarChar(160)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@index([status, runAt])
 }
 
 model Customer {
@@ -498,6 +538,11 @@ model Appointment {
   paymentStatus     PaymentStatus     @default(PENDING)
   status            AppointmentStatus @default(BOOKED)
   notes             String?
+  holdExpiresAt     DateTime?
+  manageToken       String?           @unique @db.VarChar(64)
+  confirmationSentAt DateTime?
+  reminder24SentAt  DateTime?
+  reminder2SentAt   DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   salon             Salon             @relation(fields: [salonId], references: [id], onDelete: Cascade)
@@ -650,14 +695,16 @@ model User {
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  ipAddress String?  @db.VarChar(64)
-  userAgent String?  @db.VarChar(500)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  userId               String
+  tokenHash            String   @unique
+  expiresAt            DateTime
+  createdAt            DateTime @default(now())
+  ipAddress            String?  @db.VarChar(64)
+  userAgent            String?  @db.VarChar(500)
+  /// Platform admin userId that minted this session via impersonation; null for a normal login.
+  impersonatedByUserId String?
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])

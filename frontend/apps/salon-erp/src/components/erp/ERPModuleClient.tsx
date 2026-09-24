@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Children, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
   BarChart3,
@@ -26,7 +28,6 @@ import {
   UserCog,
   Users,
   Wallet,
-  CheckCircle2,
   AlertCircle,
   Search,
   TrendingUp,
@@ -38,6 +39,7 @@ import {
   X,
   Check,
   Download,
+  Printer,
 } from "lucide-react";
 import {
   useERPStore,
@@ -54,6 +56,9 @@ import {
   type Coupon,
 } from "@/src/lib/erp-store";
 import { employeeForm, validationMessage } from "@/src/lib/form-validation";
+import { downloadInvoicePdf, printInvoicePdf } from "@/src/lib/invoice-pdf";
+import CustomerEditDialog from "./CustomerEditDialog";
+import ReportsPanel from "./ReportsPanel";
 
 type Module =
   | "customers"
@@ -219,7 +224,13 @@ const meta: Record<
 };
 
 const inputClass =
-  "w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900";
+  "h-10 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-sm text-foreground shadow-xs outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50";
+const primaryButtonClass =
+  "inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-xs transition hover:bg-primary/90 active:translate-y-px disabled:pointer-events-none disabled:opacity-50";
+const formatInvoiceDate = (value: string) => {
+  const parsed = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
 const money = (value: number) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 
 async function submitAndReset(
@@ -239,17 +250,17 @@ async function submitAndReset(
 export default function ERPModuleClient({ module }: { module: Module }) {
   const info = meta[module];
   const Icon = info.icon;
-  const { error, successMessage, clearError, clearSuccess, features, hydrated } = useERPStore();
+  const { features, hydrated } = useERPStore();
   const requiredFeature = moduleFeature[module];
 
   if (hydrated && requiredFeature && !features.includes(requiredFeature)) {
     return (
       <section className="mx-auto grid min-h-[50vh] max-w-lg place-items-center px-4 text-center">
-        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
           <AlertCircle className="mx-auto h-9 w-9 text-amber-500" />
-          <h1 className="mt-4 text-xl font-bold text-zinc-950">Module not included in your plan</h1>
-          <p className="mt-2 text-sm leading-6 text-zinc-500">Ask your platform administrator to enable {requiredFeature.replace(/_/g, " ")} for this salon.</p>
-          <Link href="/dashboard" className="mt-6 inline-flex rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white">Return to dashboard</Link>
+          <h1 className="mt-4 text-xl font-bold text-foreground">Module not included in your plan</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Ask your platform administrator to enable {requiredFeature.replace(/_/g, " ")} for this salon.</p>
+          <Link href="/dashboard" className="mt-6 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white">Return to dashboard</Link>
         </div>
       </section>
     );
@@ -262,66 +273,20 @@ export default function ERPModuleClient({ module }: { module: Module }) {
       transition={{ duration: 0.2 }}
       className="mx-auto max-w-7xl space-y-6 pb-12"
     >
-      {/* Toast Notification Messages */}
-      <AnimatePresence>
-        {successMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="flex items-center justify-between rounded-2xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-800"
-          >
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>{successMessage}</span>
-            </div>
-            <button
-              onClick={clearSuccess}
-              className="text-xs font-semibold text-emerald-700 hover:text-emerald-900"
-            >
-              Dismiss
-            </button>
-          </motion.div>
-        )}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="flex items-center justify-between rounded-2xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-800"
-          >
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-              <span>{error}</span>
-            </div>
-            <button
-              onClick={clearError}
-              className="text-xs font-semibold text-red-700 hover:text-red-900"
-            >
-              Dismiss
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Header Banner */}
-      <div className="flex flex-col justify-between gap-4 rounded-3xl border border-zinc-200/80 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-4 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border sm:flex-row sm:items-center">
         <div className="flex items-center gap-4">
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-zinc-950 text-white shadow-md shadow-zinc-950/10">
-            <Icon className="h-7 w-7" />
+          <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <Icon className="size-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-                {info.title}
-              </h1>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{info.title}</h1>
               {info.badge && (
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 border border-zinc-200">
-                  {info.badge}
-                </span>
+                <span className="rounded-full border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">{info.badge}</span>
               )}
             </div>
-            <p className="text-sm text-zinc-500 mt-0.5">{info.description}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{info.description}</p>
           </div>
         </div>
       </div>
@@ -367,11 +332,11 @@ function SectionPanel({
   action?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-sm transition-all duration-200">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4">
-        <div>
-          <h2 className="font-semibold text-zinc-950 text-base">{title}</h2>
-          {subtitle && <p className="text-xs text-zinc-400 mt-0.5">{subtitle}</p>}
+    <section className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 sm:px-6">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {action && <div>{action}</div>}
       </div>
@@ -392,18 +357,14 @@ function StatCard({
   icon: typeof Users;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-      <div className="grid h-12 w-12 place-items-center rounded-xl bg-zinc-100 text-zinc-800">
-        <Icon className="h-6 w-6" />
+    <div className="flex items-center gap-4 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border transition-shadow hover:shadow-md">
+      <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/5 text-primary">
+        <Icon className="size-5" />
       </div>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          {title}
-        </p>
-        <p className="text-2xl font-bold tracking-tight text-zinc-950 mt-0.5">
-          {value}
-        </p>
-        {subtitle && <p className="text-xs text-zinc-500 mt-0.5">{subtitle}</p>}
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+        <p className="mt-0.5 truncate text-2xl font-semibold tracking-tight tabular-nums text-foreground">{value}</p>
+        {subtitle && <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p>}
       </div>
     </div>
   );
@@ -416,46 +377,70 @@ function DataTable({
   heads: string[];
   children: React.ReactNode;
 }) {
+  const isEmpty = Children.toArray(children).length === 0;
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-zinc-50/75 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100">
+        <thead className="border-b bg-muted/50 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           <tr>
             {heads.map((head, idx) => (
-              <th key={idx} className="px-6 py-3.5">
+              <th key={idx} className="whitespace-nowrap px-6 py-3">
                 {head}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-100 text-zinc-700">{children}</tbody>
+        <tbody className="divide-y divide-border text-foreground/80 [&>tr]:transition-colors [&>tr:hover]:bg-muted/40">{children}</tbody>
       </table>
+      {isEmpty && <p className="px-6 py-10 text-center text-sm text-muted-foreground">Nothing here yet.</p>}
     </div>
   );
 }
 
 function DeleteButton({ onClick }: { onClick: () => Promise<void> }) {
   const [deleting, setDeleting] = useState(false);
+  const [open, setOpen] = useState(false);
   const remove = async () => {
-    if (deleting || !window.confirm("Delete this record? This action cannot be undone.")) return;
+    if (deleting) return;
     setDeleting(true);
     try {
       await onClick();
+      setOpen(false);
+    } catch {
+      // The store surfaces the failure as a toast; keep the dialog usable.
     } finally {
       setDeleting(false);
     }
   };
   return (
-    <button
-      type="button"
-      onClick={() => void remove()}
-      disabled={deleting}
-      aria-busy={deleting}
-      className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-wait disabled:opacity-50"
-      title={deleting ? "Deleting…" : "Delete record"}
-    >
-      <Trash2 className="h-4 w-4" />
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={deleting}
+        aria-busy={deleting}
+        className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-wait disabled:opacity-50"
+        title="Delete record"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+      <AlertDialog open={open} onOpenChange={(next) => !deleting && setOpen(next)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this record?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" disabled={deleting} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={deleting} onClick={() => void remove()}>
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -464,7 +449,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
+      className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       title="Edit record"
     >
       <Pencil className="h-4 w-4" />
@@ -478,13 +463,17 @@ function EditButton({ onClick }: { onClick: () => void }) {
 function CustomersView() {
   const { customers, addCustomer, deleteCustomer } = useERPStore();
   const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<Customer | null>(null);
+  const [tier, setTier] = useState("all");
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     return customers.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q)
+      (c) =>
+        (tier === "all" || c.membership === tier) &&
+        (!q || c.name.toLowerCase().includes(q) || c.phone.replace(/\s+/g, "").includes(q.replace(/\s+/g, "")) || (c.email ?? "").toLowerCase().includes(q)),
     );
-  }, [customers, query]);
+  }, [customers, query, tier]);
 
   return (
     <div className="space-y-6">
@@ -521,9 +510,15 @@ function CustomersView() {
           onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
+            const digits = String(form.get("phone")).replace(/\s+/g, "");
+            const existing = customers.find((c) => c.phone.replace(/\s+/g, "") === digits);
+            if (existing) {
+              useERPStore.setState({ error: `${existing.name} is already registered with this phone number.` });
+              return;
+            }
             await submitAndReset(e.currentTarget, () => addCustomer({
-              name: String(form.get("name")),
-              phone: String(form.get("phone")),
+              name: String(form.get("name")).trim(),
+              phone: String(form.get("phone")).trim(),
               email: String(form.get("email") || ""),
               membership: form.get("membership") as Customer["membership"],
             }));
@@ -531,7 +526,7 @@ function CustomersView() {
           className="grid gap-3 p-5 sm:grid-cols-4"
         >
           <input required name="name" placeholder="Full Name" className={inputClass} />
-          <input required name="phone" placeholder="Phone Number" className={inputClass} />
+          <input required name="phone" type="tel" minLength={5} placeholder="Phone Number" className={inputClass} />
           <input name="email" type="email" placeholder="Email (Optional)" className={inputClass} />
           <div className="flex gap-2">
             <select name="membership" defaultValue="Standard" className={inputClass}>
@@ -539,7 +534,7 @@ function CustomersView() {
               <option value="Silver">Silver</option>
               <option value="Gold">Gold</option>
             </select>
-            <button className="flex items-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 shrink-0">
+            <button className={`${primaryButtonClass} shrink-0`}>
               <Plus className="h-4 w-4" /> Add
             </button>
           </div>
@@ -550,51 +545,66 @@ function CustomersView() {
         title="Customer Directory"
         subtitle={`${filtered.length} client records`}
         action={
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name / phone..."
-              className={`${inputClass} pl-9 py-1.5 text-xs`}
-            />
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name, phone or email…"
+                aria-label="Search customers"
+                className={`${inputClass} pl-9`}
+              />
+            </div>
+            <select value={tier} onChange={(e) => setTier(e.target.value)} aria-label="Filter by tier" className={`${inputClass} w-32`}>
+              <option value="all">All tiers</option>
+              <option value="Standard">Standard</option>
+              <option value="Silver">Silver</option>
+              <option value="Gold">Gold</option>
+            </select>
           </div>
         }
       >
         <DataTable heads={["Name", "Phone", "Tier", "Points", "Lifetime Spend", "Actions"]}>
           {filtered.map((c) => (
-            <tr key={c.id} className="hover:bg-zinc-50/50">
-              <td className="px-6 py-3.5 font-medium text-zinc-900">{c.name}</td>
-              <td className="px-6 py-3.5 text-zinc-600">{c.phone}</td>
+            <tr key={c.id} className="hover:bg-muted/60">
+              <td className="px-6 py-3.5">
+                <p className="font-medium text-foreground">{c.name}</p>
+                {c.email && <p className="text-xs text-muted-foreground">{c.email}</p>}
+              </td>
+              <td className="px-6 py-3.5 text-foreground/70">{c.phone}</td>
               <td className="px-6 py-3.5">
                 <span
                   className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                     c.membership === "Gold"
                       ? "bg-amber-100 text-amber-800 border border-amber-200"
                       : c.membership === "Silver"
-                      ? "bg-zinc-100 text-zinc-800 border border-zinc-200"
-                      : "bg-zinc-50 text-zinc-600"
+                      ? "bg-muted/60 text-foreground/80 border border-border"
+                      : "bg-muted/60 text-foreground/70"
                   }`}
                 >
                   {c.membership}
                 </span>
               </td>
-              <td className="px-6 py-3.5 font-semibold text-zinc-900">{c.points || 0} pts</td>
-              <td className="px-6 py-3.5 font-medium text-zinc-900">{money(c.totalSpend || 0)}</td>
+              <td className="px-6 py-3.5 font-semibold text-foreground">{c.points || 0} pts</td>
+              <td className="px-6 py-3.5 font-medium text-foreground">{money(c.totalSpend || 0)}</td>
               <td className="px-6 py-3.5 text-right">
+                <EditButton onClick={() => setEditing(c)} />
                 <DeleteButton onClick={() => deleteCustomer(c.id)} />
               </td>
             </tr>
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                 No customers found.
               </td>
             </tr>
           )}
         </DataTable>
       </SectionPanel>
+      <CustomerEditDialog customer={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }
@@ -632,6 +642,7 @@ function EmployeesView() {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            const formEl = e.currentTarget;
             const form = new FormData(e.currentTarget);
             try {
               const values = employeeForm.parse({
@@ -642,7 +653,7 @@ function EmployeesView() {
                 baseSalary: form.get("baseSalary"),
               });
               await addEmployee({ ...values, active: true });
-              e.currentTarget.reset();
+              formEl.reset();
             } catch (error) {
               useERPStore.setState({ error: validationMessage(error) });
             }
@@ -653,7 +664,7 @@ function EmployeesView() {
           <input required name="role" placeholder="Role (e.g. Senior Stylist)" className={inputClass} />
           <input required name="phone" placeholder="Phone Number" className={inputClass} />
           <input required name="baseSalary" type="number" placeholder="Base Salary (₹)" className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Add Staff
           </button>
         </form>
@@ -662,11 +673,11 @@ function EmployeesView() {
       <SectionPanel title="Staff Directory" subtitle="Current salon staff and designations">
         <DataTable heads={["Name", "Role", "Contact", "Base Salary", "Status", "Actions"]}>
           {employees.map((e) => (
-            <tr key={e.id} className="hover:bg-zinc-50/50">
-              <td className="px-6 py-3.5 font-medium text-zinc-900">{e.name}</td>
-              <td className="px-6 py-3.5 text-zinc-600">{e.role}</td>
-              <td className="px-6 py-3.5 text-zinc-600">{e.phone}</td>
-              <td className="px-6 py-3.5 font-medium text-zinc-900">{money(e.baseSalary)}</td>
+            <tr key={e.id} className="hover:bg-muted/60">
+              <td className="px-6 py-3.5 font-medium text-foreground">{e.name}</td>
+              <td className="px-6 py-3.5 text-foreground/70">{e.role}</td>
+              <td className="px-6 py-3.5 text-foreground/70">{e.phone}</td>
+              <td className="px-6 py-3.5 font-medium text-foreground">{money(e.baseSalary)}</td>
               <td className="px-6 py-3.5">
                 <button
                   type="button"
@@ -674,7 +685,7 @@ function EmployeesView() {
                   className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer ${
                     e.active
                       ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                      : "bg-zinc-100 text-zinc-500"
+                      : "bg-muted/60 text-muted-foreground"
                   }`}
                 >
                   {e.active ? "Active" : "Inactive"}
@@ -687,7 +698,7 @@ function EmployeesView() {
           ))}
           {employees.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                 No staff members listed.
               </td>
             </tr>
@@ -744,8 +755,8 @@ function ServicesView() {
           <input required name="name" placeholder="Service Name (e.g. Hair Spa)" className={inputClass} />
           <input required name="price" type="number" placeholder="Price (₹)" className={inputClass} />
           <input required name="durationMinutes" type="number" placeholder="Duration (Minutes)" className={inputClass} />
-          <label className="flex items-center gap-2 px-2 text-sm font-medium text-zinc-700"><input name="isPublic" type="checkbox" defaultChecked /> Show on website</label>
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <label className="flex items-center gap-2 px-2 text-sm font-medium text-foreground/80"><input name="isPublic" type="checkbox" defaultChecked /> Show on website</label>
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Add Service
           </button>
         </form>
@@ -756,8 +767,8 @@ function ServicesView() {
           {services.map((s) => {
             const isEditing = editingId === s.id;
             return (
-              <tr key={s.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">
+              <tr key={s.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.name}
@@ -768,7 +779,7 @@ function ServicesView() {
                     s.name
                   )}
                 </td>
-                <td className="px-6 py-3.5 font-semibold text-zinc-900">
+                <td className="px-6 py-3.5 font-semibold text-foreground">
                   {isEditing ? (
                     <input
                       type="number"
@@ -780,7 +791,7 @@ function ServicesView() {
                     money(s.price)
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-600">
+                <td className="px-6 py-3.5 text-foreground/70">
                   {isEditing ? (
                     <input
                       type="number"
@@ -793,7 +804,7 @@ function ServicesView() {
                   )}
                 </td>
                 <td className="px-6 py-3.5 text-sm">
-                  {isEditing ? <label className="flex items-center gap-2 text-zinc-700"><input type="checkbox" checked={editForm.isPublic} onChange={(e) => setEditForm({ ...editForm, isPublic: e.target.checked })} /> Visible</label> : <span className={s.isPublic ?? true ? "text-emerald-700" : "text-zinc-400"}>{s.isPublic ?? true ? "Visible" : "Hidden"}</span>}
+                  {isEditing ? <label className="flex items-center gap-2 text-foreground/80"><input type="checkbox" checked={editForm.isPublic} onChange={(e) => setEditForm({ ...editForm, isPublic: e.target.checked })} /> Visible</label> : <span className={s.isPublic ?? true ? "text-emerald-700" : "text-muted-foreground"}>{s.isPublic ?? true ? "Visible" : "Hidden"}</span>}
                 </td>
                 <td className="px-6 py-3.5 text-right">
                   <div className="flex items-center justify-end gap-1">
@@ -810,7 +821,7 @@ function ServicesView() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 transition-colors"
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -829,7 +840,7 @@ function ServicesView() {
           })}
           {services.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
                 No services added.
               </td>
             </tr>
@@ -893,7 +904,7 @@ function InventoryView() {
           <input required name="stock" type="number" placeholder="Initial Qty" className={inputClass} />
           <input required name="reorderLevel" type="number" placeholder="Reorder Alert Qty" className={inputClass} />
           <input required name="unitCost" type="number" placeholder="Unit Cost (₹)" className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Add Item
           </button>
         </form>
@@ -904,21 +915,21 @@ function InventoryView() {
           {inventory.map((item) => {
             const isLow = item.stock <= item.reorderLevel;
             return (
-              <tr key={item.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">{item.name}</td>
-                <td className="px-6 py-3.5 text-xs font-mono text-zinc-500">{item.sku}</td>
-                <td className="px-6 py-3.5 font-semibold text-zinc-900">
+              <tr key={item.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">{item.name}</td>
+                <td className="px-6 py-3.5 text-xs font-mono text-muted-foreground">{item.sku}</td>
+                <td className="px-6 py-3.5 font-semibold text-foreground">
                   <span
                     className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold ${
-                      isLow ? "bg-red-100 text-red-700" : "bg-zinc-100 text-zinc-800"
+                      isLow ? "bg-red-100 text-red-700" : "bg-muted/60 text-foreground/80"
                     }`}
                   >
                     {item.stock} units
                   </span>
                 </td>
-                <td className="px-6 py-3.5 text-zinc-500">{item.reorderLevel} units</td>
-                <td className="px-6 py-3.5 text-zinc-600">{money(item.unitCost)}</td>
-                <td className="px-6 py-3.5 font-medium text-zinc-900">{money(item.stock * item.unitCost)}</td>
+                <td className="px-6 py-3.5 text-muted-foreground">{item.reorderLevel} units</td>
+                <td className="px-6 py-3.5 text-foreground/70">{money(item.unitCost)}</td>
+                <td className="px-6 py-3.5 font-medium text-foreground">{money(item.stock * item.unitCost)}</td>
                 <td className="px-6 py-3.5 text-right">
                   <DeleteButton onClick={() => deleteInventory(item.id)} />
                 </td>
@@ -935,21 +946,67 @@ function InventoryView() {
 // 5. BILLING & INVOICES VIEW
 // -------------------------------------------------------------
 function BillingView() {
-  const { invoices, customers, appointments, addInvoice, deleteInvoice } = useERPStore();
+  const { invoices, customers, appointments, addInvoice, deleteInvoice, settings, services: catalogServices } = useERPStore();
   const [invoiceAppointmentId, setInvoiceAppointmentId] = useState("");
   const [invoiceCustomerId, setInvoiceCustomerId] = useState("");
   const [invoiceAmount, setInvoiceAmount] = useState("");
 
-  const downloadInvoice = (invoice: Invoice) => {
-    const customer = customers.find((item) => item.id === invoice.customerId);
-    const appointment = appointments.find((item) => item.id === invoice.appointmentId);
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${invoice.invoiceNumber ?? "Invoice"}</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#18181b}h1{margin-bottom:4px}.muted{color:#71717a}.row{display:flex;justify-content:space-between;border-bottom:1px solid #e4e4e7;padding:12px 0}.total{font-size:22px;font-weight:700}</style></head><body><h1>Salon Invoice</h1><div class="muted">${invoice.invoiceNumber ?? "INV-DRAFT"} · ${invoice.createdAt}</div><hr><p><b>Customer:</b> ${customer?.name ?? "Walk-in Guest"}<br><b>Phone:</b> ${customer?.phone ?? "—"}</p>${appointment ? `<p><b>Appointment:</b> ${appointment.appointment.appointmentNumber}<br><b>Service:</b> ${appointment.services.map((service) => service.name).join(", ")}</p>` : ""}<div class="row"><span>Payment status</span><b>${invoice.status}</b></div><div class="row total"><span>Total</span><span>${money(invoice.amount)}</span></div><p class="muted">Thank you for visiting us.</p></body></html>`;
-    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+  const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
+  const [invoiceQuery, setInvoiceQuery] = useState("");
+  const [invoiceStatus, setInvoiceStatus] = useState("all");
+
+  const invoiceContext = (invoice: Invoice) => ({
+    invoice,
+    customer: customers.find((item) => item.id === invoice.customerId),
+    appointment: appointments.find((item) => item.id === invoice.appointmentId),
+    settings,
+    catalog: catalogServices,
+  });
+  const runPdf = async (invoice: Invoice, action: (context: ReturnType<typeof invoiceContext>) => Promise<void>) => {
+    if (pdfBusyId) return;
+    setPdfBusyId(invoice.id);
+    try {
+      await action(invoiceContext(invoice));
+    } catch {
+      useERPStore.setState({ error: "Could not generate the invoice PDF. Please try again." });
+    } finally {
+      setPdfBusyId(null);
+    }
+  };
+  const downloadInvoice = (invoice: Invoice) => runPdf(invoice, downloadInvoicePdf);
+  const printInvoice = (invoice: Invoice) => runPdf(invoice, printInvoicePdf);
+
+  const visibleInvoices = useMemo(() => {
+    const query = invoiceQuery.trim().toLowerCase();
+    return [...invoices]
+      .filter((invoice) => {
+        const customerName = customers.find((item) => item.id === invoice.customerId)?.name ?? "walk-in guest";
+        return (
+          (invoiceStatus === "all" || invoice.status === invoiceStatus) &&
+          (!query || (invoice.invoiceNumber ?? "").toLowerCase().includes(query) || customerName.toLowerCase().includes(query))
+        );
+      })
+      .sort((x, y) => y.createdAt.localeCompare(x.createdAt) || (y.invoiceNumber ?? "").localeCompare(x.invoiceNumber ?? ""));
+  }, [customers, invoiceQuery, invoiceStatus, invoices]);
+
+  const exportInvoicesCsv = () => {
+    const rows = [
+      "Invoice,Customer,Phone,Amount,Status,Date",
+      ...visibleInvoices.map((invoice) => {
+        const customer = customers.find((item) => item.id === invoice.customerId);
+        return [invoice.invoiceNumber ?? "", customer?.name ?? "Walk-in Guest", customer?.phone ?? "", invoice.amount, invoice.status, invoice.createdAt]
+          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+          .join(",");
+      }),
+    ].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\ufeff" + rows], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${invoice.invoiceNumber ?? "invoice"}.html`;
+    link.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const collected = invoices
@@ -987,14 +1044,14 @@ function BillingView() {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            const formEl = e.currentTarget;
             const form = new FormData(e.currentTarget);
-            await addInvoice({
+            await submitAndReset(formEl, () => addInvoice({
               customerId: invoiceCustomerId || String(form.get("customerId")),
               appointmentId: invoiceAppointmentId || undefined,
               amount: invoiceAppointmentId ? Number(invoiceAmount) : Number(form.get("amount")),
               status: form.get("status") as Invoice["status"],
-            });
-            e.currentTarget.reset();
+            }));
             setInvoiceAppointmentId("");
             setInvoiceCustomerId("");
             setInvoiceAmount("");
@@ -1024,50 +1081,80 @@ function BillingView() {
             if (amountInput) amountInput.value = amount;
           }}>
             <option value="">Link appointment (optional)...</option>
-            {appointments.map((appointment) => <option key={appointment.id} value={appointment.id}>{appointment.appointment.appointmentNumber} — {appointment.customer.name}</option>)}
+            {appointments.filter((appointment) => appointment.status !== "Cancelled" && appointment.status !== "No Show").map((appointment) => <option key={appointment.id} value={appointment.id}>{appointment.appointment.appointmentNumber} — {appointment.customer.name}</option>)}
           </select>
-          <input required name="amount" type="number" placeholder="Total Amount (₹)" className={inputClass} />
+          <input required name="amount" type="number" min="1" step="0.01" placeholder="Total Amount (₹)" className={inputClass} />
           <select name="status" defaultValue="Paid" className={inputClass}>
             <option value="Paid">Paid</option>
             <option value="Pending">Pending</option>
             <option value="Partially Paid">Partially Paid</option>
           </select>
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Issue Invoice
           </button>
         </form>
       </SectionPanel>
 
-      <SectionPanel title="Invoices Record" subtitle="Chronological salon billing receipts">
+      <SectionPanel
+        title="Invoices Record"
+        subtitle="Chronological salon billing receipts"
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              value={invoiceQuery}
+              onChange={(event) => setInvoiceQuery(event.target.value)}
+              placeholder="Search invoice or customer"
+              aria-label="Search invoices"
+              className={`${inputClass} h-9 w-52`}
+            />
+            <select value={invoiceStatus} onChange={(event) => setInvoiceStatus(event.target.value)} aria-label="Filter by status" className={`${inputClass} h-9 w-36`}>
+              <option value="all">All status</option>
+              <option value="Paid">Paid</option>
+              <option value="Pending">Pending</option>
+              <option value="Partially Paid">Partially Paid</option>
+              <option value="Refunded">Refunded</option>
+            </select>
+            <button type="button" onClick={exportInvoicesCsv} disabled={visibleInvoices.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium text-foreground/80 transition hover:bg-muted disabled:opacity-50">
+              <Download className="h-4 w-4" /> CSV
+            </button>
+          </div>
+        }
+      >
         <DataTable heads={["Invoice #", "Customer", "Amount", "Issued Date", "Status", "Actions"]}>
-          {invoices.map((inv) => {
+          {visibleInvoices.map((inv) => {
             const cust = customers.find((c) => c.id === inv.customerId);
             return (
-              <tr key={inv.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-mono text-xs font-semibold text-zinc-900">
+              <tr key={inv.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-mono text-xs font-semibold text-foreground">
                   {inv.invoiceNumber ?? "INV-DRAFT"}
                 </td>
-                <td className="px-6 py-3.5 font-medium text-zinc-900">
+                <td className="px-6 py-3.5 font-medium text-foreground">
                   {cust?.name ?? "Walk-in Guest"}
                 </td>
-                <td className="px-6 py-3.5 font-semibold text-zinc-900">{money(inv.amount)}</td>
-                <td className="px-6 py-3.5 text-zinc-500">{inv.createdAt}</td>
+                <td className="px-6 py-3.5 font-semibold text-foreground">{money(inv.amount)}</td>
+                <td className="px-6 py-3.5 text-muted-foreground">{formatInvoiceDate(inv.createdAt)}</td>
                 <td className="px-6 py-3.5">
                   <span
                     className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                       inv.status === "Paid"
                         ? "bg-emerald-100 text-emerald-800"
-                        : inv.status === "Pending"
+                        : inv.status === "Pending" || inv.status === "Partially Paid"
                         ? "bg-amber-100 text-amber-800"
-                        : "bg-zinc-100 text-zinc-700"
+                        : inv.status === "Refunded"
+                        ? "bg-violet-100 text-violet-800"
+                        : "bg-muted/60 text-foreground/80"
                     }`}
                   >
                     {inv.status}
                   </span>
                 </td>
                 <td className="px-6 py-3.5 text-right">
-                  <button type="button" title="Download invoice" onClick={() => downloadInvoice(inv)} className="mr-3 inline-flex rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950">
-                    <Download className="h-4 w-4" />
+                  <button type="button" title="Download PDF" aria-label="Download invoice PDF" disabled={pdfBusyId === inv.id} onClick={() => void downloadInvoice(inv)} className="inline-flex rounded-lg p-2 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:opacity-50">
+                    {pdfBusyId === inv.id ? <span className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent" /> : <Download className="h-4 w-4" />}
+                  </button>
+                  <button type="button" title="Print invoice" aria-label="Print invoice" disabled={pdfBusyId === inv.id} onClick={() => void printInvoice(inv)} className="mr-2 inline-flex rounded-lg p-2 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:opacity-50">
+                    <Printer className="h-4 w-4" />
                   </button>
                   <DeleteButton onClick={() => deleteInvoice(inv.id)} />
                 </td>
@@ -1113,10 +1200,10 @@ function PayrollView() {
               </option>
             ))}
           </select>
-          <input required name="month" type="month" defaultValue={new Date().toISOString().slice(0, 7)} className={inputClass} />
+          <input required name="month" type="month" defaultValue={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`} className={inputClass} />
           <input name="baseSalary" type="number" placeholder="Base Salary (₹)" className={inputClass} />
           <input name="commission" type="number" placeholder="Commission (₹)" className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Create Payroll
           </button>
         </form>
@@ -1128,12 +1215,12 @@ function PayrollView() {
             const emp = employees.find((e) => e.id === p.employeeId);
             const isPaid = p.status === "Paid";
             return (
-              <tr key={p.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">{emp?.name ?? "Employee"}</td>
-                <td className="px-6 py-3.5 text-zinc-600">{p.month}</td>
-                <td className="px-6 py-3.5 text-zinc-600">{money(p.baseSalary)}</td>
+              <tr key={p.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">{emp?.name ?? "Employee"}</td>
+                <td className="px-6 py-3.5 text-foreground/70">{p.month}</td>
+                <td className="px-6 py-3.5 text-foreground/70">{money(p.baseSalary)}</td>
                 <td className="px-6 py-3.5 text-emerald-600 font-medium">{money(p.commission)}</td>
-                <td className="px-6 py-3.5 font-bold text-zinc-900">{money(p.baseSalary + p.commission)}</td>
+                <td className="px-6 py-3.5 font-bold text-foreground">{money(p.baseSalary + p.commission)}</td>
                 <td className="px-6 py-3.5">
                   <button
                     type="button"
@@ -1157,7 +1244,7 @@ function PayrollView() {
           })}
           {payroll.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
                 No payroll records found.
               </td>
             </tr>
@@ -1221,7 +1308,7 @@ function BranchesView() {
           <input required name="code" placeholder="Branch Code (e.g. BLR-01)" className={inputClass} />
           <input required name="city" placeholder="City" className={inputClass} />
           <input required name="phone" placeholder="Contact Phone" className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Add Branch
           </button>
         </form>
@@ -1233,8 +1320,8 @@ function BranchesView() {
             const isEditing = editingId === b.id;
             const isActive = b.status === "ACTIVE";
             return (
-              <tr key={b.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">
+              <tr key={b.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.name}
@@ -1245,7 +1332,7 @@ function BranchesView() {
                     b.name
                   )}
                 </td>
-                <td className="px-6 py-3.5 font-mono text-xs text-zinc-500">
+                <td className="px-6 py-3.5 font-mono text-xs text-muted-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.code}
@@ -1256,7 +1343,7 @@ function BranchesView() {
                     b.code
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-600">
+                <td className="px-6 py-3.5 text-foreground/70">
                   {isEditing ? (
                     <input
                       value={editForm.city}
@@ -1267,7 +1354,7 @@ function BranchesView() {
                     b.city || "—"
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-600">
+                <td className="px-6 py-3.5 text-foreground/70">
                   {isEditing ? (
                     <input
                       value={editForm.phone}
@@ -1285,7 +1372,7 @@ function BranchesView() {
                     className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer transition ${
                       isActive
                         ? "bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200"
-                        : "bg-zinc-100 text-zinc-600 border border-zinc-200 hover:bg-zinc-200"
+                        : "bg-muted/60 text-foreground/70 border border-border hover:bg-muted"
                     }`}
                     title="Click to toggle status"
                   >
@@ -1308,7 +1395,7 @@ function BranchesView() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 transition-colors"
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -1327,7 +1414,7 @@ function BranchesView() {
           })}
           {branches.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                 No branches added yet. Primary location active.
               </td>
             </tr>
@@ -1401,7 +1488,7 @@ function AttendanceView() {
             <option value="">Primary salon location</option>
             {branches.filter((branch) => branch.status === "ACTIVE").map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
           </select>
-          <button disabled={recording} className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60">
+          <button disabled={recording} className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> {recording ? "Recording…" : "Record Check-In"}
           </button>
         </form>
@@ -1410,19 +1497,19 @@ function AttendanceView() {
       <SectionPanel title="Attendance history" subtitle="Choose a day to see who attended. Green dates have attendance records.">
         <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="text-sm font-medium text-zinc-700">Month<input type="month" value={month} onChange={(event) => setSelectedDate(`${event.target.value}-01`)} className={`${inputClass} mt-1 w-full`} /></label>
-            <label className="text-sm font-medium text-zinc-700">Date<input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className={`${inputClass} mt-1 w-full`} /></label>
-            <label className="text-sm font-medium text-zinc-700">Employee<select value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)} className={`${inputClass} mt-1 w-full`}><option value="">All employees</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label>
+            <label className="text-sm font-medium text-foreground/80">Month<input type="month" value={month} onChange={(event) => setSelectedDate(`${event.target.value}-01`)} className={`${inputClass} mt-1 w-full`} /></label>
+            <label className="text-sm font-medium text-foreground/80">Date<input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className={`${inputClass} mt-1 w-full`} /></label>
+            <label className="text-sm font-medium text-foreground/80">Employee<select value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)} className={`${inputClass} mt-1 w-full`}><option value="">All employees</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label>
           </div>
-          <button type="button" onClick={() => setSelectedDate(today)} className="self-end rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50">Today</button>
+          <button type="button" onClick={() => setSelectedDate(today)} className="self-end rounded-xl border border-border px-4 py-2.5 text-sm font-semibold hover:bg-muted/60">Today</button>
         </div>
         <div className="grid grid-cols-7 gap-1 border-t p-5 text-center text-xs">
-          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day) => <span key={day} className="pb-1 font-semibold text-zinc-400">{day}</span>)}
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day) => <span key={day} className="pb-1 font-semibold text-muted-foreground">{day}</span>)}
           {Array.from({ length: firstWeekday }).map((_, index) => <span key={`empty-${index}`} />)}
           {Array.from({ length: daysInMonth }, (_, index) => {
             const date = `${month}-${String(index + 1).padStart(2, "0")}`;
             const attended = attendanceDays.has(date);
-            return <button type="button" key={date} onClick={() => setSelectedDate(date)} title={attended ? "Attendance recorded" : "No attendance recorded"} className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full font-semibold ${date === selectedDate ? "bg-zinc-950 text-white" : attended ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200" : "text-zinc-500 hover:bg-zinc-100"}`}>{index + 1}</button>;
+            return <button type="button" key={date} onClick={() => setSelectedDate(date)} title={attended ? "Attendance recorded" : "No attendance recorded"} className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full font-semibold ${date === selectedDate ? "bg-primary text-white" : attended ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200" : "text-muted-foreground hover:bg-muted/60"}`}>{index + 1}</button>;
           })}
         </div>
       </SectionPanel>
@@ -1432,25 +1519,25 @@ function AttendanceView() {
           {dayRecords.map((a) => {
             const emp = employees.find((e) => e.id === a.employeeId);
             return (
-              <tr key={a.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">{emp?.name ?? a.employeeName ?? "Staff"}</td>
-                <td className="px-6 py-3.5 text-zinc-500">{new Date(a.checkIn).toLocaleString("en-IN")}</td>
-                <td className="px-6 py-3.5 text-zinc-500">{a.checkOut ? new Date(a.checkOut).toLocaleString("en-IN") : "Still on shift"}</td>
-                <td className="px-6 py-3.5 text-zinc-700">{a.totalHours == null ? "—" : `${a.totalHours.toFixed(2)} h`}</td>
+              <tr key={a.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">{emp?.name ?? a.employeeName ?? "Staff"}</td>
+                <td className="px-6 py-3.5 text-muted-foreground">{new Date(a.checkIn).toLocaleString("en-IN")}</td>
+                <td className="px-6 py-3.5 text-muted-foreground">{a.checkOut ? new Date(a.checkOut).toLocaleString("en-IN") : "Still on shift"}</td>
+                <td className="px-6 py-3.5 text-foreground/80">{a.totalHours == null ? "—" : `${a.totalHours.toFixed(2)} h`}</td>
                 <td className="px-6 py-3.5">
                   <select value={a.status} onChange={(event) => void updateAttendance(a.id, { status: event.target.value as AttendanceRecord["status"] })} className={`${inputClass} min-w-28 py-1 text-xs`}>
                     <option value="PRESENT">Present</option><option value="LATE">Late</option><option value="HALF_DAY">Half Day</option><option value="ABSENT">Absent</option><option value="ON_LEAVE">On Leave</option>
                   </select>
                 </td>
                 <td className="px-6 py-3.5 text-right">
-                  {!a.checkOut && <button type="button" onClick={() => void checkOutAttendance(a.id)} className="rounded-xl bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800">Check out now</button>}
+                  {!a.checkOut && <button type="button" onClick={() => void checkOutAttendance(a.id)} className={`${primaryButtonClass} h-8 px-3 text-xs`}>Check out now</button>}
                 </td>
               </tr>
             );
           })}
           {dayRecords.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                 No attendance recorded for this date.
               </td>
             </tr>
@@ -1530,7 +1617,7 @@ function ExpensesView() {
             <option value="MISCELLANEOUS">Miscellaneous</option>
           </select>
           <input required name="amount" type="number" placeholder="Amount (₹)" className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Save Expense
           </button>
         </form>
@@ -1541,8 +1628,8 @@ function ExpensesView() {
           {expenses.map((e) => {
             const isEditing = editingId === e.id;
             return (
-              <tr key={e.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">
+              <tr key={e.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.title}
@@ -1553,7 +1640,7 @@ function ExpensesView() {
                     e.title
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-xs text-zinc-500 font-semibold">
+                <td className="px-6 py-3.5 text-xs text-muted-foreground font-semibold">
                   {isEditing ? (
                     <select
                       value={editForm.category}
@@ -1598,7 +1685,7 @@ function ExpensesView() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 transition-colors"
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -1617,7 +1704,7 @@ function ExpensesView() {
           })}
           {expenses.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">
                 No expenses logged yet.
               </td>
             </tr>
@@ -1671,14 +1758,14 @@ function SuppliersView() {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            const formEl = e.currentTarget;
             const form = new FormData(e.currentTarget);
-            await addSupplier({
+            await submitAndReset(formEl, () => addSupplier({
               name: String(form.get("name")),
               contactPerson: String(form.get("contactPerson")),
               phone: String(form.get("phone")),
               email: String(form.get("email")),
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-5"
         >
@@ -1686,7 +1773,7 @@ function SuppliersView() {
           <input name="contactPerson" placeholder="Representative Name" className={inputClass} />
           <input required name="phone" placeholder="Phone" className={inputClass} />
           <input name="email" type="email" placeholder="Email" className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Add Vendor
           </button>
         </form>
@@ -1697,8 +1784,8 @@ function SuppliersView() {
           {suppliers.map((s) => {
             const isEditing = editingId === s.id;
             return (
-              <tr key={s.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">
+              <tr key={s.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.name}
@@ -1709,7 +1796,7 @@ function SuppliersView() {
                     s.name
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-600">
+                <td className="px-6 py-3.5 text-foreground/70">
                   {isEditing ? (
                     <input
                       value={editForm.contactPerson}
@@ -1720,7 +1807,7 @@ function SuppliersView() {
                     s.contactPerson || "—"
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-600">
+                <td className="px-6 py-3.5 text-foreground/70">
                   {isEditing ? (
                     <input
                       value={editForm.phone}
@@ -1731,7 +1818,7 @@ function SuppliersView() {
                     s.phone
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-500">
+                <td className="px-6 py-3.5 text-muted-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.email}
@@ -1757,7 +1844,7 @@ function SuppliersView() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 transition-colors"
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -1776,7 +1863,7 @@ function SuppliersView() {
           })}
           {suppliers.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
                 No suppliers registered.
               </td>
             </tr>
@@ -1830,15 +1917,15 @@ function PackagesView() {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            const formEl = e.currentTarget;
             const form = new FormData(e.currentTarget);
-            await addPackage({
+            await submitAndReset(formEl, () => addPackage({
               name: String(form.get("name")),
               description: String(form.get("description")),
               price: Number(form.get("price")),
               validityDays: Number(form.get("validityDays") || 30),
               isActive: true,
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-5"
         >
@@ -1846,7 +1933,7 @@ function PackagesView() {
           <input name="description" placeholder="Description" className={inputClass} />
           <input required name="price" type="number" placeholder="Package Price (₹)" className={inputClass} />
           <input required name="validityDays" type="number" placeholder="Validity (Days)" defaultValue={30} className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Create Package
           </button>
         </form>
@@ -1857,8 +1944,8 @@ function PackagesView() {
           {packages.map((p) => {
             const isEditing = editingId === p.id;
             return (
-              <tr key={p.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">
+              <tr key={p.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.name}
@@ -1869,7 +1956,7 @@ function PackagesView() {
                     p.name
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-500">
+                <td className="px-6 py-3.5 text-muted-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.description}
@@ -1880,7 +1967,7 @@ function PackagesView() {
                     p.description || "—"
                   )}
                 </td>
-                <td className="px-6 py-3.5 font-semibold text-zinc-900">
+                <td className="px-6 py-3.5 font-semibold text-foreground">
                   {isEditing ? (
                     <input
                       type="number"
@@ -1892,7 +1979,7 @@ function PackagesView() {
                     money(p.price)
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-600">
+                <td className="px-6 py-3.5 text-foreground/70">
                   {isEditing ? (
                     <input
                       type="number"
@@ -1911,7 +1998,7 @@ function PackagesView() {
                     className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer transition ${
                       p.isActive
                         ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                        : "bg-zinc-100 text-zinc-500"
+                        : "bg-muted/60 text-muted-foreground"
                     }`}
                   >
                     {p.isActive ? "Active" : "Inactive"}
@@ -1932,7 +2019,7 @@ function PackagesView() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 transition-colors"
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -1951,7 +2038,7 @@ function PackagesView() {
           })}
           {packages.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                 No packages configured.
               </td>
             </tr>
@@ -2005,15 +2092,15 @@ function CouponsView() {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            const formEl = e.currentTarget;
             const form = new FormData(e.currentTarget);
-            await addCoupon({
+            await submitAndReset(formEl, () => addCoupon({
               code: String(form.get("code")).toUpperCase().trim(),
               discountType: form.get("discountType") as Coupon["discountType"],
               discountValue: Number(form.get("discountValue")),
               minimumOrder: Number(form.get("minOrderAmount") || 0),
               isActive: true,
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-5"
         >
@@ -2024,7 +2111,7 @@ function CouponsView() {
           </select>
           <input required name="discountValue" type="number" placeholder="Discount Value" className={inputClass} />
           <input name="minOrderAmount" type="number" placeholder="Min Order (₹)" className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Add Coupon
           </button>
         </form>
@@ -2035,8 +2122,8 @@ function CouponsView() {
           {coupons.map((c) => {
             const isEditing = editingId === c.id;
             return (
-              <tr key={c.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-mono font-bold text-zinc-950">
+              <tr key={c.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-mono font-bold text-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.code}
@@ -2047,7 +2134,7 @@ function CouponsView() {
                     c.code
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-xs text-zinc-500">
+                <td className="px-6 py-3.5 text-xs text-muted-foreground">
                   {isEditing ? (
                     <select
                       value={editForm.discountType}
@@ -2073,7 +2160,7 @@ function CouponsView() {
                     c.discountType === "PERCENTAGE" ? `${c.discountValue}% OFF` : `₹${c.discountValue} OFF`
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-600">
+                <td className="px-6 py-3.5 text-foreground/70">
                   {isEditing ? (
                     <input
                       type="number"
@@ -2092,7 +2179,7 @@ function CouponsView() {
                     className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer transition ${
                       c.isActive
                         ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                        : "bg-zinc-100 text-zinc-500"
+                        : "bg-muted/60 text-muted-foreground"
                     }`}
                   >
                     {c.isActive ? "Active" : "Inactive"}
@@ -2113,7 +2200,7 @@ function CouponsView() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 transition-colors"
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -2132,7 +2219,7 @@ function CouponsView() {
           })}
           {coupons.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                 No active coupons created.
               </td>
             </tr>
@@ -2174,13 +2261,13 @@ function ReviewsView() {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            const formEl = e.currentTarget;
             const form = new FormData(e.currentTarget);
-            await addReview({
+            await submitAndReset(formEl, () => addReview({
               customerId: String(form.get("customerId")),
               rating: Number(form.get("rating")),
               comment: String(form.get("comment")),
-            });
-            e.currentTarget.reset();
+            }));
           }}
           className="grid gap-3 p-5 sm:grid-cols-4"
         >
@@ -2200,7 +2287,7 @@ function ReviewsView() {
             <option value="1">⭐ (1 Star)</option>
           </select>
           <input required name="comment" placeholder="Feedback comment" className={inputClass} />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Save Review
           </button>
         </form>
@@ -2211,11 +2298,11 @@ function ReviewsView() {
           {reviews.map((r) => {
             const cust = customers.find((c) => c.id === r.customerId);
             return (
-              <tr key={r.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">{cust?.name ?? r.customerName ?? "Client"}</td>
+              <tr key={r.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">{cust?.name ?? r.customerName ?? "Client"}</td>
                 <td className="px-6 py-3.5 text-amber-500 font-bold">{"★".repeat(r.rating)}</td>
-                <td className="px-6 py-3.5 text-zinc-700 italic">&ldquo;{r.comment || "Great service!"}&rdquo;</td>
-                <td className="px-6 py-3.5 text-zinc-400 text-xs">
+                <td className="px-6 py-3.5 text-foreground/80 italic">&ldquo;{r.comment || "Great service!"}&rdquo;</td>
+                <td className="px-6 py-3.5 text-muted-foreground text-xs">
                   {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN") : "—"}
                 </td>
               </tr>
@@ -2223,7 +2310,7 @@ function ReviewsView() {
           })}
           {reviews.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">
                 No reviews recorded yet.
               </td>
             </tr>
@@ -2282,7 +2369,7 @@ function LoyaltyView() {
             placeholder="Reason"
             className={inputClass}
           />
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+          <button className={primaryButtonClass}>
             <Gift className="h-4 w-4" /> Apply Points
           </button>
         </form>
@@ -2291,12 +2378,12 @@ function LoyaltyView() {
       <SectionPanel title="Customer Loyalty Standings" subtitle="Points balances and membership tiers">
         <DataTable heads={["Customer", "Phone", "Tier", "Points Balance", "Estimated Value"]}>
           {customers.map((c) => (
-            <tr key={c.id} className="hover:bg-zinc-50/50">
-              <td className="px-6 py-3.5 font-medium text-zinc-900">{c.name}</td>
-              <td className="px-6 py-3.5 text-zinc-600">{c.phone}</td>
+            <tr key={c.id} className="hover:bg-muted/60">
+              <td className="px-6 py-3.5 font-medium text-foreground">{c.name}</td>
+              <td className="px-6 py-3.5 text-foreground/70">{c.phone}</td>
               <td className="px-6 py-3.5 font-semibold text-amber-700">{c.membership}</td>
-              <td className="px-6 py-3.5 font-bold text-zinc-900">{c.points || 0} pts</td>
-              <td className="px-6 py-3.5 text-zinc-500">{money((c.points || 0) * 0.5)}</td>
+              <td className="px-6 py-3.5 font-bold text-foreground">{c.points || 0} pts</td>
+              <td className="px-6 py-3.5 text-muted-foreground">{money((c.points || 0) * 0.5)}</td>
             </tr>
           ))}
       </DataTable>
@@ -2309,108 +2396,7 @@ function LoyaltyView() {
 // 15. REPORTS VIEW
 // -------------------------------------------------------------
 function ReportsView() {
-  const { invoices, expenses, payroll, appointments } = useERPStore();
-
-  const totalRevenue = invoices
-    .filter((i) => i.status === "Paid")
-    .reduce((s, i) => s + i.amount, 0);
-  const totalExpense = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const totalPayroll = payroll
-    .filter((p) => p.status === "Paid")
-    .reduce((s, p) => s + p.baseSalary + p.commission, 0);
-
-  const netProfit = totalRevenue - totalExpense - totalPayroll;
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-4">
-        <StatCard
-          title="Gross Revenue"
-          value={money(totalRevenue)}
-          subtitle="Collected receipts"
-          icon={TrendingUp}
-        />
-        <StatCard
-          title="Operating Expenses"
-          value={money(totalExpense)}
-          subtitle="Supplies, rent & misc"
-          icon={TrendingDown}
-        />
-        <StatCard
-          title="Paid Payroll"
-          value={money(totalPayroll)}
-          subtitle="Staff payouts"
-          icon={Wallet}
-        />
-        <StatCard
-          title="Net Profit"
-          value={money(netProfit)}
-          subtitle={netProfit >= 0 ? "Profitable operations" : "Operating deficit"}
-          icon={BarChart3}
-        />
-      </div>
-
-      <SectionPanel title="Financial Performance Summary" subtitle="Key metrics calculated from live transactions">
-        <div className="grid gap-6 p-6 md:grid-cols-2">
-          <div className="space-y-4 rounded-2xl border border-zinc-100 bg-zinc-50/50 p-5">
-            <h3 className="font-semibold text-zinc-900">Appointments Performance</h3>
-            <div className="space-y-2 text-sm text-zinc-600">
-              <div className="flex justify-between">
-                <span>Total Bookings:</span>
-                <b className="text-zinc-900">{appointments.length}</b>
-              </div>
-              <div className="flex justify-between">
-                <span>Completed Visits:</span>
-                <b className="text-zinc-900">
-                  {appointments.filter((a) => a.status === "Completed").length}
-                </b>
-              </div>
-              <div className="flex justify-between">
-                <span>Walk-in Share:</span>
-                <b className="text-zinc-900">
-                  {Math.round(
-                    (appointments.filter((a) => a.appointment.source === "Walk-in").length /
-                      Math.max(appointments.length, 1)) *
-                      100
-                  )}
-                  %
-                </b>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4 rounded-2xl border border-zinc-100 bg-zinc-50/50 p-5">
-            <h3 className="font-semibold text-zinc-900">Average Transaction Size</h3>
-            <div className="space-y-2 text-sm text-zinc-600">
-              <div className="flex justify-between">
-                <span>Average Invoice Value:</span>
-                <b className="text-zinc-900">
-                  {money(
-                    invoices.length
-                      ? Math.round(
-                          invoices.reduce((s, i) => s + i.amount, 0) / invoices.length
-                        )
-                      : 0
-                  )}
-                </b>
-              </div>
-              <div className="flex justify-between">
-                <span>Paid Rate:</span>
-                <b className="text-emerald-700">
-                  {Math.round(
-                    (invoices.filter((i) => i.status === "Paid").length /
-                      Math.max(invoices.length, 1)) *
-                      100
-                  )}
-                  %
-                </b>
-              </div>
-            </div>
-          </div>
-        </div>
-      </SectionPanel>
-    </div>
-  );
+  return <ReportsPanel />;
 }
 
 // -------------------------------------------------------------
@@ -2421,23 +2407,37 @@ function NotificationsView() {
 
   return (
     <div className="space-y-6">
-      <SectionPanel title="Notifications Inbox" subtitle={`${notifications.length} alerts received`}>
-        <div className="divide-y divide-zinc-100">
+      <SectionPanel
+        title="Notifications Inbox"
+        subtitle={`${notifications.length} alerts received`}
+        action={
+          notifications.some((n) => !n.readAt) ? (
+            <button
+              type="button"
+              onClick={() => void Promise.all(notifications.filter((n) => !n.readAt).map((n) => markNotificationRead(n.id)))}
+              className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-foreground/80 transition hover:bg-muted"
+            >
+              Mark all read
+            </button>
+          ) : undefined
+        }
+      >
+        <div className="divide-y divide-border">
           {notifications.map((n) => (
             <div
               key={n.id}
               className={`flex items-center justify-between p-5 transition-colors ${
-                !n.readAt ? "bg-amber-50/30" : "bg-white"
+                !n.readAt ? "bg-amber-50/30" : "bg-card"
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 grid h-8 w-8 place-items-center rounded-xl bg-zinc-100 text-zinc-700">
+                <div className="mt-0.5 grid h-8 w-8 place-items-center rounded-xl bg-muted/60 text-foreground/80">
                   <Bell className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-zinc-900 text-sm">{n.title}</h4>
-                  <p className="text-xs text-zinc-600 mt-0.5">{n.message}</p>
-                  <span className="text-[10px] text-zinc-400 mt-1 block">
+                  <h4 className="font-semibold text-foreground text-sm">{n.title}</h4>
+                  <p className="text-xs text-foreground/70 mt-0.5">{n.message}</p>
+                  <span className="text-[10px] text-muted-foreground mt-1 block">
                     {new Date(n.createdAt).toLocaleString("en-IN")}
                   </span>
                 </div>
@@ -2446,7 +2446,7 @@ function NotificationsView() {
                 <button
                   type="button"
                   onClick={() => markNotificationRead(n.id)}
-                  className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 transition"
+                  className="rounded-lg bg-muted/60 px-3 py-1.5 text-xs font-semibold text-foreground/80 hover:bg-muted transition"
                 >
                   Mark read
                 </button>
@@ -2454,7 +2454,7 @@ function NotificationsView() {
             </div>
           ))}
           {notifications.length === 0 && (
-            <p className="p-8 text-center text-zinc-400 text-sm">
+            <p className="p-8 text-center text-muted-foreground text-sm">
               All caught up! No notifications.
             </p>
           )}
@@ -2487,12 +2487,12 @@ function SettingsView() {
         >
           {/* Section 1: Business Identity */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100 pb-2">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
               Business Identity & Branding
             </h3>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Salon Trade Name
                 </label>
                 <input
@@ -2503,7 +2503,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Legal Entity Name
                 </label>
                 <input
@@ -2514,7 +2514,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   GSTIN / Tax ID
                 </label>
                 <input
@@ -2525,7 +2525,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Brand Logo URL
                 </label>
                 <input
@@ -2536,7 +2536,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Official Website
                 </label>
                 <input
@@ -2547,7 +2547,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Contact Phone
                 </label>
                 <input
@@ -2558,7 +2558,7 @@ function SettingsView() {
                 />
               </div>
               <div className="sm:col-span-3">
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Official Email
                 </label>
                 <input
@@ -2574,12 +2574,12 @@ function SettingsView() {
 
           {/* Section 2: Physical Address & Localization */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100 pb-2">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
               Physical Location & Regional Settings
             </h3>
             <div className="grid gap-4 sm:grid-cols-4">
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Street Address
                 </label>
                 <input
@@ -2590,7 +2590,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   City
                 </label>
                 <input
@@ -2600,7 +2600,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   State
                 </label>
                 <input
@@ -2610,7 +2610,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Postal / PIN Code
                 </label>
                 <input
@@ -2620,7 +2620,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Currency Code
                 </label>
                 <input
@@ -2630,7 +2630,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Locale
                 </label>
                 <input
@@ -2640,7 +2640,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Timezone
                 </label>
                 <input
@@ -2654,12 +2654,12 @@ function SettingsView() {
 
           {/* Section 3: Billing & Tax */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100 pb-2">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
               Billing & Invoicing Defaults
             </h3>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Applicable GST / Tax Rate (%)
                 </label>
                 <input
@@ -2670,7 +2670,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Invoice Number Prefix
                 </label>
                 <input
@@ -2684,12 +2684,12 @@ function SettingsView() {
 
           {/* Section 4: Store Operations & Booking Rules */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100 pb-2">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
               Operating Hours & Booking Policies
             </h3>
             <div className="grid gap-4 sm:grid-cols-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Opening Time
                 </label>
                 <input
@@ -2700,7 +2700,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Closing Time
                 </label>
                 <input
@@ -2711,7 +2711,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Appointment Slot (Minutes)
                 </label>
                 <input
@@ -2722,7 +2722,7 @@ function SettingsView() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                   Cancellation Window (Hours)
                 </label>
                 <input
@@ -2737,52 +2737,52 @@ function SettingsView() {
 
           {/* Section 5: Automation & Alert Toggles */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100 pb-2">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
               Automations & Preferences
             </h3>
             <div className="grid gap-4 sm:grid-cols-3">
-              <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:bg-zinc-50 transition">
+              <label className="flex items-center gap-3 rounded-2xl border border-border p-4 cursor-pointer hover:bg-muted/60 transition">
                 <input
                   type="checkbox"
                   checked={formState.allowOnlineBooking ?? true}
                   onChange={(e) => setFormState({ ...formState, allowOnlineBooking: e.target.checked })}
-                  className="h-4 w-4 rounded text-zinc-950 focus:ring-zinc-950"
+                  className="h-4 w-4 rounded text-foreground focus:ring-ring"
                 />
                 <div>
-                  <p className="text-sm font-semibold text-zinc-900">Allow Online Booking</p>
-                  <p className="text-xs text-zinc-500">Enable client self-service scheduling</p>
+                  <p className="text-sm font-semibold text-foreground">Allow Online Booking</p>
+                  <p className="text-xs text-muted-foreground">Enable client self-service scheduling</p>
                 </div>
               </label>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:bg-zinc-50 transition">
+              <label className="flex items-center gap-3 rounded-2xl border border-border p-4 cursor-pointer hover:bg-muted/60 transition">
                 <input
                   type="checkbox"
                   checked={formState.lowStockAlerts ?? true}
                   onChange={(e) => setFormState({ ...formState, lowStockAlerts: e.target.checked })}
-                  className="h-4 w-4 rounded text-zinc-950 focus:ring-zinc-950"
+                  className="h-4 w-4 rounded text-foreground focus:ring-ring"
                 />
                 <div>
-                  <p className="text-sm font-semibold text-zinc-900">Low Stock Notifications</p>
-                  <p className="text-xs text-zinc-500">Alert staff when items hit reorder level</p>
+                  <p className="text-sm font-semibold text-foreground">Low Stock Notifications</p>
+                  <p className="text-xs text-muted-foreground">Alert staff when items hit reorder level</p>
                 </div>
               </label>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:bg-zinc-50 transition">
+              <label className="flex items-center gap-3 rounded-2xl border border-border p-4 cursor-pointer hover:bg-muted/60 transition">
                 <input
                   type="checkbox"
                   checked={formState.dailyRevenueDigest ?? true}
                   onChange={(e) => setFormState({ ...formState, dailyRevenueDigest: e.target.checked })}
-                  className="h-4 w-4 rounded text-zinc-950 focus:ring-zinc-950"
+                  className="h-4 w-4 rounded text-foreground focus:ring-ring"
                 />
                 <div>
-                  <p className="text-sm font-semibold text-zinc-900">Daily Revenue Digest</p>
-                  <p className="text-xs text-zinc-500">Send end-of-day summary reports</p>
+                  <p className="text-sm font-semibold text-foreground">Daily Revenue Digest</p>
+                  <p className="text-xs text-muted-foreground">Send end-of-day summary reports</p>
                 </div>
               </label>
             </div>
           </div>
 
-          <button className="flex items-center gap-2 rounded-xl bg-zinc-950 px-8 py-3 text-sm font-semibold text-white hover:bg-zinc-800 shadow-md transition">
+          <button className="flex items-center gap-2 rounded-xl bg-primary px-8 py-3 text-sm font-semibold text-white hover:bg-primary/90 shadow-md transition">
             <Save className="h-4 w-4" /> Save Configuration
           </button>
         </form>
@@ -2878,7 +2878,7 @@ function MembershipsView() {
             <input required name="validityDays" type="number" placeholder="Validity (Days)" defaultValue={365} className={inputClass} />
             <input required name="discountPercentage" type="number" placeholder="Discount (% on all services)" className={inputClass} />
             <input required name="loyaltyMultiplier" type="number" step="0.1" placeholder="Points Multiplier (e.g. 2.0x)" defaultValue={1.5} className={inputClass} />
-            <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+            <button className={primaryButtonClass}>
               <Plus className="h-4 w-4" /> Create Tier
             </button>
           </form>
@@ -2921,7 +2921,7 @@ function MembershipsView() {
                 </option>
               ))}
             </select>
-            <button className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
+            <button className={`${primaryButtonClass} w-full`}>
               <Crown className="h-4 w-4" /> Assign Membership Plan
             </button>
           </form>
@@ -2933,8 +2933,8 @@ function MembershipsView() {
           {membershipPlans.map((p) => {
             const isEditing = editingId === p.id;
             return (
-              <tr key={p.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-medium text-zinc-900">
+              <tr key={p.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-medium text-foreground">
                   {isEditing ? (
                     <input
                       value={editForm.name}
@@ -2948,7 +2948,7 @@ function MembershipsView() {
                     </div>
                   )}
                 </td>
-                <td className="px-6 py-3.5 font-semibold text-zinc-900">
+                <td className="px-6 py-3.5 font-semibold text-foreground">
                   {isEditing ? (
                     <input
                       type="number"
@@ -2960,7 +2960,7 @@ function MembershipsView() {
                     money(p.price)
                   )}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-600">
+                <td className="px-6 py-3.5 text-foreground/70">
                   {isEditing ? (
                     <input
                       type="number"
@@ -3012,7 +3012,7 @@ function MembershipsView() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 transition-colors"
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -3031,7 +3031,7 @@ function MembershipsView() {
           })}
           {membershipPlans.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                 No membership plans configured. Create one above.
               </td>
             </tr>
@@ -3177,7 +3177,7 @@ function PurchaseOrdersView() {
               placeholder="Unit Cost (₹)"
               className={inputClass}
             />
-            <button className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 shrink-0">
+            <button className={`${primaryButtonClass} shrink-0`}>
               <Plus className="h-4 w-4" /> Issue PO
             </button>
           </div>
@@ -3192,14 +3192,14 @@ function PurchaseOrdersView() {
             const canReceive = po.status !== "RECEIVED" && po.status !== "CANCELLED";
 
             return (
-              <tr key={po.id} className="hover:bg-zinc-50/50">
-                <td className="px-6 py-3.5 font-mono text-xs font-semibold text-zinc-900">
+              <tr key={po.id} className="hover:bg-muted/60">
+                <td className="px-6 py-3.5 font-mono text-xs font-semibold text-foreground">
                   {po.id.slice(0, 8).toUpperCase()}
                 </td>
-                <td className="px-6 py-3.5 font-medium text-zinc-900">
+                <td className="px-6 py-3.5 font-medium text-foreground">
                   {supp?.name ?? "Distributor"}
                 </td>
-                <td className="px-6 py-3.5 text-zinc-700">
+                <td className="px-6 py-3.5 text-foreground/80">
                   {po.items?.map((item, idx) => {
                     const inv = inventory.find((i) => i.id === item.inventoryItemId);
                     return (
@@ -3209,8 +3209,8 @@ function PurchaseOrdersView() {
                     );
                   })}
                 </td>
-                <td className="px-6 py-3.5 font-semibold text-zinc-900">{money(po.totalAmount)}</td>
-                <td className="px-6 py-3.5 text-zinc-500 text-xs">
+                <td className="px-6 py-3.5 font-semibold text-foreground">{money(po.totalAmount)}</td>
+                <td className="px-6 py-3.5 text-muted-foreground text-xs">
                   {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString("en-IN") : "—"}
                 </td>
                 <td className="px-6 py-3.5">
@@ -3230,12 +3230,12 @@ function PurchaseOrdersView() {
                   {canReceive && (
                     <div className="flex items-center justify-end gap-2">
                       {isReceiving ? (
-                        <div className="w-72 space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-left">
-                          <p className="text-xs font-semibold text-zinc-700">Receive each delivered item</p>
+                        <div className="w-72 space-y-2 rounded-xl border border-border bg-muted/60 p-3 text-left">
+                          <p className="text-xs font-semibold text-foreground/80">Receive each delivered item</p>
                           {po.items.map((item) => {
                             const remaining = item.quantity - (item.receivedQuantity || 0);
                             const inv = inventory.find((entry) => entry.id === item.inventoryItemId);
-                            return <label key={item.inventoryItemId} className="flex items-center justify-between gap-2 text-xs text-zinc-600"><span className="min-w-0 truncate">{inv?.name ?? "Item"} <b>({remaining} left)</b></span><input type="number" min="0" max={remaining} value={receiptQuantities[item.inventoryItemId] ?? 0} onChange={(event) => setReceiptQuantities((current) => ({ ...current, [item.inventoryItemId]: Math.max(0, Math.min(remaining, Number(event.target.value) || 0)) }))} className={`${inputClass} w-16 px-2 py-1 text-xs`} /></label>;
+                            return <label key={item.inventoryItemId} className="flex items-center justify-between gap-2 text-xs text-foreground/70"><span className="min-w-0 truncate">{inv?.name ?? "Item"} <b>({remaining} left)</b></span><input type="number" min="0" max={remaining} value={receiptQuantities[item.inventoryItemId] ?? 0} onChange={(event) => setReceiptQuantities((current) => ({ ...current, [item.inventoryItemId]: Math.max(0, Math.min(remaining, Number(event.target.value) || 0)) }))} className={`${inputClass} w-16 px-2 py-1 text-xs`} /></label>;
                           })}
                           <div className="flex justify-end gap-1.5 pt-1">
                           <button
@@ -3253,7 +3253,7 @@ function PurchaseOrdersView() {
                           <button
                             type="button"
                             onClick={() => { setReceivingOrderId(null); setReceiptQuantities({}); }}
-                            className="rounded-lg bg-zinc-100 text-zinc-600 px-2 py-1 text-xs hover:bg-zinc-200"
+                            className="rounded-lg bg-muted/60 text-foreground/70 px-2 py-1 text-xs hover:bg-muted"
                           >
                             Cancel
                           </button>
@@ -3266,7 +3266,7 @@ function PurchaseOrdersView() {
                             setReceivingOrderId(po.id);
                             setReceiptQuantities(Object.fromEntries(po.items.map((item) => [item.inventoryItemId, Math.max(0, item.quantity - (item.receivedQuantity || 0))])));
                           }}
-                          className="inline-flex items-center gap-1 rounded-xl bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
+                          className={`${primaryButtonClass} h-8 px-3 text-xs`}
                         >
                           <Boxes className="h-3.5 w-3.5" /> Receive Stock
                         </button>
@@ -3279,7 +3279,7 @@ function PurchaseOrdersView() {
           })}
           {purchaseOrders.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-6 py-8 text-center text-zinc-400">
+              <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
                 No purchase orders raised yet.
               </td>
             </tr>
@@ -3302,54 +3302,54 @@ function ProfileView() {
   return (
     <div className="space-y-6">
       <SectionPanel title="Account & Identity" subtitle="Logged in administrator profile">
-        <div className="space-y-4 p-6 text-sm text-zinc-700">
+        <div className="space-y-4 p-6 text-sm text-foreground/80">
           <div className="flex items-center gap-4">
-            <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-950 text-2xl font-bold text-white">
+            <div className="grid h-16 w-16 place-items-center rounded-2xl bg-primary text-2xl font-bold text-white">
               {currentUser?.name?.slice(0, 2).toUpperCase() || "AD"}
             </div>
             <div>
-              <h3 className="text-xl font-bold text-zinc-950">{currentUser?.name || "Salon Admin"}</h3>
-              <p className="text-zinc-500">{currentUser?.email || "admin@example.com"}</p>
-              <span className="mt-1 inline-block rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700">
+              <h3 className="text-xl font-bold text-foreground">{currentUser?.name || "Salon Admin"}</h3>
+              <p className="text-muted-foreground">{currentUser?.email || "admin@example.com"}</p>
+              <span className="mt-1 inline-block rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-foreground/80">
                 {currentUser?.role || "SALON_ADMIN"}
               </span>
             </div>
           </div>
-          <div className="border-t border-zinc-100 pt-4 space-y-2">
+          <div className="border-t border-border pt-4 space-y-2">
             <div className="flex justify-between">
-              <span className="text-zinc-500">Salon Name:</span>
-              <b className="text-zinc-950">{currentSalon?.name || "DropX Studio"}</b>
+              <span className="text-muted-foreground">Salon Name:</span>
+              <b className="text-foreground">{currentSalon?.name || "DropX Studio"}</b>
             </div>
             <div className="flex justify-between">
-              <span className="text-zinc-500">Salon Code:</span>
-              <b className="font-mono text-zinc-950">{currentSalon?.code || "salon"}</b>
+              <span className="text-muted-foreground">Salon Code:</span>
+              <b className="font-mono text-foreground">{currentSalon?.code || "salon"}</b>
             </div>
           </div>
         </div>
       </SectionPanel>
       <SectionPanel title="Plan & access" subtitle="Your current subscription and enabled capabilities">
-        <div className="space-y-4 p-6 text-sm text-zinc-700">
+        <div className="space-y-4 p-6 text-sm text-foreground/80">
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl bg-zinc-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Plan</p>
-              <p className="mt-1 text-lg font-bold text-zinc-950">{subscription?.plan || "Not assigned"}</p>
+            <div className="rounded-xl bg-muted/60 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Plan</p>
+              <p className="mt-1 text-lg font-bold text-foreground">{subscription?.plan || "Not assigned"}</p>
             </div>
-            <div className="rounded-xl bg-zinc-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Status</p>
-              <p className="mt-1 text-lg font-bold text-zinc-950">{subscription?.status || "Unavailable"}</p>
+            <div className="rounded-xl bg-muted/60 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Status</p>
+              <p className="mt-1 text-lg font-bold text-foreground">{subscription?.status || "Unavailable"}</p>
             </div>
-            <div className="rounded-xl bg-zinc-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Website</p>
-              <p className="mt-1 text-lg font-bold text-zinc-950">{website?.type || "Not configured"}</p>
+            <div className="rounded-xl bg-muted/60 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Website</p>
+              <p className="mt-1 text-lg font-bold text-foreground">{website?.type || "Not configured"}</p>
             </div>
           </div>
           <div>
-            <p className="mb-2 font-semibold text-zinc-950">Included features</p>
+            <p className="mb-2 font-semibold text-foreground">Included features</p>
             {featureLabels.length ? (
               <div className="flex flex-wrap gap-2">
                 {featureLabels.map((label) => <span key={label} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{label}</span>)}
               </div>
-            ) : <p className="text-zinc-500">No premium features are enabled. Contact the platform administrator to upgrade your plan.</p>}
+            ) : <p className="text-muted-foreground">No premium features are enabled. Contact the platform administrator to upgrade your plan.</p>}
           </div>
           <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -3357,7 +3357,7 @@ function ProfileView() {
               <p className="mt-1 text-xs text-amber-800">Send an upgrade request to the platform team. Your plan will only change after approval.</p>
             </div>
             <a
-              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-zinc-950 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
+              className={`${primaryButtonClass} shrink-0 h-8 px-3 text-xs`}
               href={`mailto:support@dropxcutz.com?subject=${encodeURIComponent(`Upgrade request - ${currentSalon?.name || "Salon"}`)}`}
             >
               Request upgrade

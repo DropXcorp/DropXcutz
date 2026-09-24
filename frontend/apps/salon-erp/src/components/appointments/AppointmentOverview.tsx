@@ -31,11 +31,11 @@ export default function AppointmentOverview({
   data,
 }: AppointmentOverviewProps) {
   return (
-    <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
+    <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <AppointmentKPICard
         title="Total Appointments"
         value={data.totalAppointments}
-        subtitle="Today's bookings"
+        subtitle="All bookings"
         icon={CalendarCheck2}
         iconBgColor="bg-blue-100"
         iconColor="text-blue-600"

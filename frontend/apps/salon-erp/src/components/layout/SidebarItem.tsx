@@ -28,8 +28,8 @@ export default function SidebarItem({
       onClick={onClick}
       className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all ${
         active
-          ? "bg-black text-white"
-          : "text-zinc-600 hover:bg-zinc-100 hover:text-black"
+          ? "bg-primary text-white"
+          : "text-foreground/70 hover:bg-muted/60 hover:text-foreground"
       }`}
     >
       <Icon size={20} />

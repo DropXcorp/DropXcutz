@@ -16,7 +16,7 @@ async function forward(request: Request, resource: string[], method: string) {
     },
   );
   const headers = new Headers();
-  for (const name of ["content-type", "content-disposition"]) {
+  for (const name of ["content-type", "content-disposition", "set-cookie"]) {
     const value = response.headers.get(name);
     if (value) headers.set(name, value);
   }

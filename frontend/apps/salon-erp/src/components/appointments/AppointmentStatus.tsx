@@ -57,7 +57,7 @@ const statusConfig: Record<
   "No Show": {
     label: "No Show",
     icon: Ban,
-    className: "bg-gray-200 text-gray-700",
+    className: "bg-muted text-foreground/80",
   },
 };
 

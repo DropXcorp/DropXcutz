@@ -41,17 +41,17 @@ export default function StaffSection() {
   const [assistant, setAssistant] = useState("");
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-border bg-card shadow-sm">
 
       {/* Header */}
 
-      <div className="border-b border-zinc-200 px-5 py-4">
+      <div className="border-b border-border px-5 py-4">
 
-        <h3 className="text-lg font-semibold text-zinc-900">
+        <h3 className="text-lg font-semibold text-foreground">
           Staff Assignment
         </h3>
 
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Assign the stylist responsible for this appointment.
         </p>
 
@@ -63,7 +63,7 @@ export default function StaffSection() {
 
         <div>
 
-          <label className="mb-3 block text-sm font-medium text-zinc-700">
+          <label className="mb-3 block text-sm font-medium text-foreground/80">
             Primary Stylist
           </label>
 
@@ -77,26 +77,26 @@ export default function StaffSection() {
                 onClick={() => setPrimaryStylist(staff.id)}
                 className={`flex w-full items-center justify-between rounded-xl border p-4 transition ${
                   primaryStylist === staff.id
-                    ? "border-black bg-zinc-50"
-                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50"
+                    ? "border-black bg-muted/60"
+                    : "border-border hover:border-border hover:bg-muted/60"
                 }`}
               >
 
                 <div className="flex items-center gap-4">
 
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/60">
 
-                    <UserRound className="h-6 w-6 text-zinc-700" />
+                    <UserRound className="h-6 w-6 text-foreground/80" />
 
                   </div>
 
                   <div className="text-left">
 
-                    <h4 className="font-semibold text-zinc-900">
+                    <h4 className="font-semibold text-foreground">
                       {staff.name}
                     </h4>
 
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-muted-foreground">
                       {staff.role}
                     </p>
 
@@ -117,7 +117,7 @@ export default function StaffSection() {
                   )}
 
                   {primaryStylist === staff.id && (
-                    <CheckCircle2 className="h-6 w-6 text-black" />
+                    <CheckCircle2 className="h-6 w-6 text-foreground" />
                   )}
 
                 </div>
@@ -134,13 +134,13 @@ export default function StaffSection() {
 
         <div>
 
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
+          <label className="mb-2 block text-sm font-medium text-foreground/80">
             Assistant (Optional)
           </label>
 
-          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4 py-3">
 
-            <Users className="h-5 w-5 text-zinc-500" />
+            <Users className="h-5 w-5 text-muted-foreground" />
 
             <select
               value={assistant}

@@ -15,6 +15,7 @@ import {
   FlaskConical,
   KeyRound,
   LayoutDashboard,
+  LogIn,
   Plus,
   Search,
   ShieldAlert,
@@ -26,6 +27,24 @@ import {
   X,
 } from "lucide-react";
 import React, { useState } from "react";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table as UiTable, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { TrendCharts, type Trend } from "@/components/trend-charts";
 
 export type Status = "TRIAL" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
 
@@ -102,6 +121,7 @@ export type OverviewData = {
   metrics: OverviewMetrics;
   salons: Salon[];
   recentAudit: AuditItem[];
+  trends?: Trend[];
 };
 
 export type Section =
@@ -110,17 +130,86 @@ export type Section =
   | "Users"
   | "Subscriptions"
   | "Plans"
+  | "Sessions"
+  | "Websites"
   | "Audit Log"
   | "Settings"
   | "Notifications"
   | "Financials"
   | "Operations";
 
+export type PlatformWebsite = {
+  salonId: string;
+  salonName: string;
+  code: string;
+  slug: string;
+  salonStatus: Status;
+  type: "NONE" | "TEMPLATE" | "CUSTOM";
+  isPublished: boolean;
+  publishedAt: string | null;
+  customDomain: string | null;
+  domainStatus: "NONE" | "PENDING_DNS" | "VERIFYING" | "ACTIVE" | "FAILED";
+  domainError: string | null;
+  liveUrl: string | null;
+  updatedAt: string;
+};
+
+export type SystemCheck = { key: string; label: string; ok: boolean; level: "required" | "recommended" | "optional"; detail: string };
+
+export function SystemStatusCard({ checks }: { checks: SystemCheck[] | null }) {
+  const [open, setOpen] = useState(false);
+  if (!checks) return null;
+  const failing = checks.filter((check) => !check.ok);
+  const blockers = failing.filter((check) => check.level === "required");
+  const tone = blockers.length ? "border-rose-200 bg-rose-50" : failing.some((check) => check.level === "recommended") ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50";
+  return (
+    <div className={cn("rounded-2xl border p-4", tone)}>
+      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={open}>
+        <span>
+          <b className="block text-sm text-foreground">System status</b>
+          <span className="text-xs text-foreground/70">
+            {blockers.length ? `${blockers.length} required setting${blockers.length === 1 ? "" : "s"} missing — websites or payments may not work.` : failing.length ? `${failing.length} recommended setting${failing.length === 1 ? "" : "s"} to review.` : "Everything is configured."}
+          </span>
+        </span>
+        <span className="text-xs font-semibold text-foreground/70">{open ? "Hide" : "Details"}</span>
+      </button>
+      {open && (
+        <ul className="mt-3 divide-y divide-black/5 rounded-xl bg-card text-sm">
+          {checks.map((check) => (
+            <li key={check.key} className="flex items-start gap-3 px-4 py-3">
+              <span className={cn("mt-1 size-2 shrink-0 rounded-full", check.ok ? "bg-emerald-500" : check.level === "required" ? "bg-rose-500" : check.level === "recommended" ? "bg-amber-500" : "bg-zinc-300")} />
+              <span className="min-w-0">
+                <b className="block text-foreground">{check.label}</b>
+                <span className="text-xs text-muted-foreground">{check.detail}</span>
+              </span>
+              <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{check.level}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export type PlatformSession = {
+  id: string;
+  userId: string;
+  createdAt: string;
+  expiresAt: string;
+  ipAddress: string | null;
+  impersonatedByUserId: string | null;
+  user: { name: string; email: string; salon: { salonName: string } | null };
+  impersonatedBy: { name: string; email: string } | null;
+};
+
 export const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10";
+  "h-9 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-sm text-foreground shadow-xs outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:opacity-50";
+
+export const outlineButtonClass =
+  cn(buttonVariants({ variant: "outline" }), "h-9 gap-2 px-4 text-sm font-semibold");
 
 export const buttonClass =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60";
+  cn(buttonVariants({ variant: "default" }), "h-9 gap-2 px-4 text-sm font-semibold shadow-xs");
 
 export const money = (v: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -140,7 +229,7 @@ export const tones: Record<Status, string> = {
   ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
   TRIAL: "border-amber-200 bg-amber-50 text-amber-700",
   SUSPENDED: "border-rose-200 bg-rose-50 text-rose-700",
-  ARCHIVED: "border-zinc-200 bg-zinc-100 text-zinc-700",
+  ARCHIVED: "border-border bg-muted/60 text-foreground/70",
 };
 
 export function Brand() {
@@ -150,8 +239,8 @@ export function Brand() {
         <Image src="/logo.png" alt="DropXcutz logo" fill sizes="40px" className="object-cover" priority />
       </div>
       <div>
-        <b className="text-base text-zinc-950 font-bold">DropXCutz</b>
-        <p className="text-xs text-zinc-500 font-medium">Super Admin Platform</p>
+        <b className="text-base text-foreground font-bold">DropXCutz</b>
+        <p className="text-xs text-muted-foreground font-medium">Super Admin Platform</p>
       </div>
     </div>
   );
@@ -168,7 +257,7 @@ export function Navigation({
 }) {
   return (
     <nav className="flex-1 space-y-1 px-3 py-5">
-      <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-widest text-zinc-400">
+      <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
         Platform Control
       </p>
       {items.map(([Icon, label]) => (
@@ -179,8 +268,8 @@ export function Navigation({
           whileTap={{ scale: 0.98 }}
           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
             section === label
-              ? "bg-zinc-950 text-white shadow-sm"
-              : "text-zinc-700 hover:bg-zinc-100"
+              ? "bg-primary text-white shadow-sm"
+              : "text-foreground/80 hover:bg-muted/60"
           }`}
         >
           <Icon className="h-[18px] w-[18px]" />
@@ -196,15 +285,15 @@ export function Navigation({
 
 export function SidebarFooter({ onLogout }: { onLogout: () => void }) {
   return (
-    <div className="m-3 flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 shadow-sm">
-      <b className="grid h-9 w-9 place-items-center rounded-full bg-zinc-900 text-xs text-white">
+    <div className="m-3 flex items-center gap-3 rounded-2xl border border-border bg-muted/60 p-3 shadow-sm">
+      <b className="grid h-9 w-9 place-items-center rounded-full bg-primary text-xs text-white">
         SA
       </b>
       <div>
-        <p className="text-sm font-bold text-zinc-900">Platform Admin</p>
-        <p className="text-xs text-zinc-500">Root authorization</p>
+        <p className="text-sm font-bold text-foreground">Platform Admin</p>
+        <p className="text-xs text-muted-foreground">Root authorization</p>
       </div>
-      <button type="button" onClick={onLogout} title="Log out" className="ml-auto rounded-lg p-2 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-950">
+      <button type="button" onClick={onLogout} title="Log out" className="ml-auto rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
         <LogOut className="h-4 w-4" />
       </button>
     </div>
@@ -220,21 +309,21 @@ export function SectionHeading({
 }) {
   return (
     <div className="animate-[fade-in_0.3s_ease-out]">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Platform workspace</p>
-      <h2 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-[28px]">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Platform workspace</p>
+      <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-[28px]">
         {title}
       </h2>
-      <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
     </div>
   );
 }
 
 export function FullPageLoader() {
   return (
-    <main className="grid min-h-screen place-items-center bg-zinc-50">
+    <main className="grid min-h-screen place-items-center bg-muted/60">
       <div className="text-center">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900" />
-        <p className="mt-4 text-sm font-semibold text-zinc-600">Connecting to platform...</p>
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-border border-t-primary" />
+        <p className="mt-4 text-sm font-semibold text-foreground/70">Connecting to platform...</p>
       </div>
     </main>
   );
@@ -268,6 +357,71 @@ export function Notice({
   );
 }
 
+export function ModalOverlay({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogPortal>
+        <DialogOverlay />
+        <DialogPrimitive.Popup
+          data-slot="modal-overlay"
+          onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+          className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-4 data-closed:animate-out data-closed:fade-out-0 sm:items-center sm:p-5 [&>*]:pointer-events-auto"
+        >
+          {children}
+        </DialogPrimitive.Popup>
+      </DialogPortal>
+    </Dialog>
+  );
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel,
+  tone = "default",
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone?: "default" | "danger";
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !next && !busy && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogMedia className={tone === "danger" ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"}>
+            <ShieldAlert />
+          </AlertDialogMedia>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <Button variant="outline" disabled={busy} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant={tone === "danger" ? "destructive" : "default"} disabled={busy} onClick={onConfirm}>
+            {busy ? "Working…" : confirmLabel}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export function Field({
   label,
   hint,
@@ -279,9 +433,9 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <b className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-600">{label}</b>
+      <b className="mb-2 block text-xs font-bold uppercase tracking-wider text-foreground/70">{label}</b>
       {children}
-      {hint && <small className="mt-1 block text-xs text-zinc-400">{hint}</small>}
+      {hint && <small className="mt-1 block text-xs text-muted-foreground">{hint}</small>}
     </label>
   );
 }
@@ -313,16 +467,16 @@ export function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_35px_-24px_rgba(15,23,42,0.5)]">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
+    <Card className="gap-0 overflow-hidden py-0 shadow-sm ring-1 ring-border">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-4 border-b px-5 py-4 sm:px-6">
         <div>
-          <h3 className="text-base font-bold text-slate-950">{title}</h3>
-          <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+          <CardTitle className="text-base font-semibold">{title}</CardTitle>
+          <CardDescription className="mt-0.5 text-xs">{subtitle}</CardDescription>
         </div>
-        {action}
-      </header>
+        {action && <CardAction className="static col-auto row-auto self-auto justify-self-auto">{action}</CardAction>}
+      </CardHeader>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -335,7 +489,7 @@ export function Avatar({ name, round = false }: { name: string; round?: boolean 
     .toUpperCase();
   return (
     <b
-      className={`grid h-10 w-10 shrink-0 place-items-center bg-zinc-100 text-xs font-bold text-zinc-800 ${
+      className={`grid h-10 w-10 shrink-0 place-items-center bg-muted/60 text-xs font-bold text-foreground/80 ${
         round ? "rounded-full" : "rounded-xl"
       }`}
     >
@@ -347,12 +501,10 @@ export function Avatar({ name, round = false }: { name: string; round?: boolean 
 export function StatusBadge({ value }: { value?: Status }) {
   const safe = value && value in tones ? value : "ARCHIVED";
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${tones[safe]}`}
-    >
-      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+    <Badge variant="outline" className={cn("h-5 gap-1.5 px-2 text-[11px] font-semibold uppercase tracking-wide", tones[safe])}>
+      <span className="size-1.5 rounded-full bg-current" />
       {safe}
-    </span>
+    </Badge>
   );
 }
 
@@ -368,9 +520,9 @@ export function Empty({
   return (
     <div className="grid min-h-56 place-items-center p-8 text-center">
       <div>
-        <Search className="mx-auto h-8 w-8 text-zinc-300" />
-        <b className="mt-4 block font-bold text-zinc-800">{title}</b>
-        <p className="mt-1 text-sm text-zinc-500">{message}</p>
+        <Search className="mx-auto h-8 w-8 text-muted-foreground" />
+        <b className="mt-4 block font-bold text-foreground/80">{title}</b>
+        <p className="mt-1 text-sm text-muted-foreground">{message}</p>
         {action && <div className="mt-5">{action}</div>}
       </div>
     </div>
@@ -390,28 +542,26 @@ export function Table({
 }) {
   if (loading)
     return (
-      <div className="animate-pulse p-6 space-y-4">
+      <div className="space-y-3 p-6">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-12 rounded-xl bg-zinc-100" />
+          <Skeleton key={i} className="h-12 rounded-xl" />
         ))}
       </div>
     );
   if (empty) return <Empty {...empty} />;
   return (
-    <div className="overflow-x-auto">
-      <table className="admin-table min-w-full text-left text-sm">
-        <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          <tr>
-            {head.map((x) => (
-              <th key={x} className="whitespace-nowrap px-5 py-3.5">
-                {x}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">{children}</tbody>
-      </table>
-    </div>
+    <UiTable className="admin-table">
+      <TableHeader className="bg-muted/50">
+        <TableRow className="hover:bg-transparent">
+          {head.map((x, i) => (
+            <TableHead key={x + i} className="h-10 whitespace-nowrap px-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {x}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>{children}</TableBody>
+    </UiTable>
   );
 }
 
@@ -427,21 +577,21 @@ export function SignIn({
   clearError: () => void;
 }) {
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-zinc-950 p-5">
-      <div className="absolute h-[520px] w-[520px] rounded-full bg-zinc-900/40 blur-3xl" />
+    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-background p-5">
+      <div className="absolute h-[520px] w-[520px] rounded-full bg-primary/5 blur-3xl" />
       <motion.form
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
         onSubmit={onSubmit}
         onChange={clearError}
-        className="relative w-full max-w-[440px] rounded-3xl bg-white p-8 shadow-2xl border border-zinc-100"
+        className="relative w-full max-w-[440px] rounded-2xl bg-card p-8 shadow-xl ring-1 ring-border"
       >
         <Brand />
         <div className="mt-9">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Control Plane</p>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-950">Platform Admin Sign In</h1>
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Control Plane</p>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">Platform Admin Sign In</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
             Enter platform credentials to manage all salon workspaces.
           </p>
         </div>
@@ -487,10 +637,12 @@ export function Overview({
   overview,
   onViewSalons,
   onUpdateStatus,
+  busy,
 }: {
   overview: OverviewData | null;
   onViewSalons: () => void;
   onUpdateStatus: (salonId: string, status: Status) => void;
+  busy?: boolean;
 }) {
   const metrics = overview?.metrics ?? {
     totalSalons: 0,
@@ -519,20 +671,22 @@ export function Overview({
         {cards.map(([Icon, label, value, sub]) => (
           <div
             key={label}
-            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm hover:shadow transition"
+            className="rounded-2xl border border-border bg-card p-5 shadow-sm hover:shadow transition"
           >
             <div className="flex justify-between items-start">
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 text-zinc-900">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-muted/60 text-foreground">
                 <Icon className="h-5 w-5" />
               </div>
-              <ArrowUpRight className="h-4 w-4 text-zinc-300" />
+              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
             </div>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">{label}</p>
-            <p className="mt-1 text-2xl font-bold text-zinc-950">{value}</p>
-            <p className="mt-1 text-xs text-zinc-500">{sub}</p>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
           </div>
         ))}
       </section>
+
+      {overview?.trends && <TrendCharts trends={overview.trends} />}
 
       <section className="grid gap-6 xl:grid-cols-[1.6fr_.8fr]">
         <Panel
@@ -541,21 +695,21 @@ export function Overview({
           action={
             <button
               onClick={onViewSalons}
-              className="text-xs font-bold uppercase tracking-wider text-zinc-900 hover:underline"
+              className="text-xs font-bold uppercase tracking-wider text-foreground hover:underline"
             >
               View all ({metrics.totalSalons})
             </button>
           }
         >
-          <div className="divide-y divide-zinc-100">
+          <div className="divide-y divide-border">
             {salons.slice(0, 6).map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-zinc-50/50 transition">
+              <div key={s.id} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-muted/40 transition">
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar name={s.salonName} />
                   <div className="min-w-0 flex-1">
-                    <b className="text-sm text-zinc-900 block truncate">{s.salonName}</b>
-                    <p className="text-xs text-zinc-500">
-                      <span className="font-mono text-zinc-700">{s.code}</span> • {s.city || "Location pending"} • {s.subscriptionPlan}
+                    <b className="text-sm text-foreground block truncate">{s.salonName}</b>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-mono text-foreground/80">{s.code}</span> • {s.city || "Location pending"} • {s.subscriptionPlan}
                     </p>
                   </div>
                 </div>
@@ -564,8 +718,9 @@ export function Overview({
                   <div className="flex gap-1">
                     {s.status !== "ACTIVE" && (
                       <button
+                        disabled={busy}
                         onClick={() => onUpdateStatus(s.id, "ACTIVE")}
-                        className="rounded-lg border border-emerald-200 bg-emerald-50 p-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                        className="rounded-lg border border-emerald-200 bg-emerald-50 p-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:pointer-events-none"
                         title="Activate Salon"
                       >
                         <Check className="h-3.5 w-3.5" />
@@ -573,8 +728,9 @@ export function Overview({
                     )}
                     {s.status !== "SUSPENDED" && (
                       <button
+                        disabled={busy}
                         onClick={() => onUpdateStatus(s.id, "SUSPENDED")}
-                        className="rounded-lg border border-rose-200 bg-rose-50 p-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                        className="rounded-lg border border-rose-200 bg-rose-50 p-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40 disabled:pointer-events-none"
                         title="Suspend Salon"
                       >
                         <ShieldAlert className="h-3.5 w-3.5" />
@@ -597,43 +753,43 @@ export function Overview({
           <div className="p-6">
             <div className="flex items-baseline justify-between">
               <div>
-                <p className="text-3xl font-bold text-zinc-950">{rate}%</p>
-                <p className="text-xs text-zinc-500">Active Workspaces Ratio</p>
+                <p className="text-3xl font-bold text-foreground">{rate}%</p>
+                <p className="text-xs text-muted-foreground">Active Workspaces Ratio</p>
               </div>
               <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
                 {metrics.activeSalons} of {metrics.totalSalons} Active
               </span>
             </div>
-            <div className="mt-4 h-2.5 rounded-full bg-zinc-100 overflow-hidden">
+            <div className="mt-4 h-2.5 rounded-full bg-muted/60 overflow-hidden">
               <div
                 className="h-full rounded-full bg-emerald-500 transition-all duration-500"
                 style={{ width: `${rate}%` }}
               />
             </div>
             <div className="mt-6 space-y-2.5">
-              <div className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 text-sm">
-                <span className="text-zinc-600 font-medium flex items-center gap-2">
+              <div className="flex items-center justify-between rounded-xl bg-muted/60 p-3 text-sm">
+                <span className="text-foreground/70 font-medium flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" /> Active
                 </span>
-                <b className="text-zinc-950 font-bold">{metrics.activeSalons}</b>
+                <b className="text-foreground font-bold">{metrics.activeSalons}</b>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 text-sm">
-                <span className="text-zinc-600 font-medium flex items-center gap-2">
+              <div className="flex items-center justify-between rounded-xl bg-muted/60 p-3 text-sm">
+                <span className="text-foreground/70 font-medium flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-amber-500" /> On Trial
                 </span>
-                <b className="text-zinc-950 font-bold">{metrics.trialSalons}</b>
+                <b className="text-foreground font-bold">{metrics.trialSalons}</b>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 text-sm">
-                <span className="text-zinc-600 font-medium flex items-center gap-2">
+              <div className="flex items-center justify-between rounded-xl bg-muted/60 p-3 text-sm">
+                <span className="text-foreground/70 font-medium flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-rose-500" /> Suspended
                 </span>
-                <b className="text-zinc-950 font-bold">{metrics.suspendedSalons}</b>
+                <b className="text-foreground font-bold">{metrics.suspendedSalons}</b>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 text-sm">
-                <span className="text-zinc-600 font-medium flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-zinc-400" /> Total Users
+              <div className="flex items-center justify-between rounded-xl bg-muted/60 p-3 text-sm">
+                <span className="text-foreground/70 font-medium flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground" /> Total Users
                 </span>
-                <b className="text-zinc-950 font-bold">{metrics.totalUsers}</b>
+                <b className="text-foreground font-bold">{metrics.totalUsers}</b>
               </div>
             </div>
           </div>
@@ -658,6 +814,8 @@ export function SalonsView({
   onDelete,
   onRestore,
   onViewDetails,
+  onImpersonate,
+  busy,
 }: {
   salons: Salon[];
   total: number;
@@ -670,6 +828,8 @@ export function SalonsView({
   onDelete: (salon: Salon) => void;
   onRestore: (salon: Salon) => void;
   onViewDetails: (salon: Salon) => void;
+  onImpersonate: (salon: Salon) => void;
+  busy?: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
@@ -707,15 +867,15 @@ export function SalonsView({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.045, duration: 0.25 }}
             whileHover={{ y: -3 }}
-            className="flex min-h-28 items-center gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_10px_30px_-20px_rgba(15,23,42,0.45)] transition-shadow hover:shadow-[0_16px_35px_-20px_rgba(37,99,235,0.3)]"
+            className="flex min-h-28 items-center gap-4 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border transition-shadow hover:shadow-[0_16px_35px_-20px_rgba(37,99,235,0.3)]"
           >
             <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${tone}`}>
               <Icon className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-500">{label}</p>
-              <p className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{value}</p>
-              <p className="mt-1 text-xs font-medium text-slate-400">{hint}</p>
+              <p className="text-sm font-medium text-muted-foreground">{label}</p>
+              <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">{value}</p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">{hint}</p>
             </div>
           </motion.article>
         ))}
@@ -725,30 +885,38 @@ export function SalonsView({
       title="Salon Workspaces Directory"
       subtitle={`${total} salons configured across platform`}
       action={
-        <button onClick={onCreate} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 active:scale-[0.98]">
-          <Plus className="h-4 w-4" /> Add Salon
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/api/platform/salons.csv"
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition hover:border-border hover:bg-muted/60 active:scale-[0.98]"
+          >
+            Export CSV
+          </a>
+          <button onClick={onCreate} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-card px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 active:scale-[0.98]">
+            <Plus className="h-4 w-4" /> Add Salon
+          </button>
+        </div>
       }
     >
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/60 p-4 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-muted/40 p-4 sm:px-6">
         <label className="relative block max-w-sm flex-1 min-w-[240px]">
-          <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, code, email, city or plan..."
-            className={`${inputClass} border-slate-200 py-3 pl-10 shadow-sm focus:border-blue-400 focus:ring-blue-500/10`}
+            className={`${inputClass} border-border py-3 pl-10 shadow-sm focus:border-blue-400 focus:ring-blue-500/10`}
           />
         </label>
-        <div className="flex gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
+        <div className="flex gap-1 rounded-xl bg-muted/60 p-1 text-xs font-semibold">
           {["ALL", "ACTIVE", "TRIAL", "SUSPENDED", "ARCHIVED"].map((tab) => (
             <button
               key={tab}
               onClick={() => setStatusFilter(tab)}
               className={`rounded-lg px-3 py-1.5 transition ${
                 statusFilter === tab
-                  ? "bg-white text-blue-700 shadow-sm ring-1 ring-blue-100"
-                  : "text-slate-500 hover:text-slate-900"
+                  ? "bg-card text-blue-700 shadow-sm ring-1 ring-blue-100"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.charAt(0) + tab.slice(1).toLowerCase()}
@@ -790,9 +958,9 @@ export function SalonsView({
               <div className="flex gap-3 items-center">
                 <Avatar name={s.salonName} />
                 <div>
-                  <b className="text-sm font-bold text-slate-900">{s.salonName}</b>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    <span className="font-mono text-zinc-700">{s.code}</span> • {s.city || "Location pending"} • {s.email}
+                  <b className="text-sm font-bold text-foreground">{s.salonName}</b>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    <span className="font-mono text-foreground/80">{s.code}</span> • {s.city || "Location pending"} • {s.email}
                   </p>
                 </div>
               </div>
@@ -802,13 +970,13 @@ export function SalonsView({
                 {s.subscriptionPlan}
               </span>
             </td>
-            <td data-label="Customers" className="px-5 py-3.5 font-medium text-slate-700">
+            <td data-label="Customers" className="px-5 py-3.5 font-medium text-foreground/80">
               {s._count?.customers || 0}
             </td>
-            <td data-label="Appointments" className="px-5 py-3.5 font-medium text-slate-700">
+            <td data-label="Appointments" className="px-5 py-3.5 font-medium text-foreground/80">
               {s._count?.appointments || 0}
             </td>
-            <td data-label="Revenue" className="px-5 py-3.5 font-bold text-slate-900">
+            <td data-label="Revenue" className="px-5 py-3.5 font-bold text-foreground">
               {money(s.paidRevenue)}
             </td>
             <td data-label="Status" className="px-5 py-3.5">
@@ -818,46 +986,61 @@ export function SalonsView({
               <div className="flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => onViewDetails(s)}
-                  className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition"
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition"
                   title="View Details"
                 >
                   <Eye className="h-4 w-4" />
                 </button>
                 {s.status !== "ARCHIVED" && <button
+                  disabled={busy}
                   onClick={() => onEdit(s)}
-                  className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition"
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition disabled:opacity-40 disabled:pointer-events-none"
                   title="Edit Salon Profile"
                 >
                   <Edit2 className="h-4 w-4" />
                 </button>}
                 {s.status === "ARCHIVED" ? (
                   <button
+                    disabled={busy}
                     onClick={() => onRestore(s)}
-                    className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 transition"
+                    className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 transition disabled:opacity-40 disabled:pointer-events-none"
                     title="Restore Salon as Suspended"
                   >
                     <Check className="h-4 w-4" />
                   </button>
                 ) : s.status === "ACTIVE" ? (
                   <button
+                    disabled={busy}
                     onClick={() => onUpdateStatus(s.id, "SUSPENDED")}
-                    className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 transition"
+                    className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 transition disabled:opacity-40 disabled:pointer-events-none"
                     title="Suspend Salon"
                   >
                     <ShieldAlert className="h-4 w-4" />
                   </button>
                 ) : (
                   <button
+                    disabled={busy}
                     onClick={() => onUpdateStatus(s.id, "ACTIVE")}
-                    className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 transition"
+                    className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 transition disabled:opacity-40 disabled:pointer-events-none"
                     title="Activate Salon"
                   >
                     <Check className="h-4 w-4" />
                   </button>
                 )}
+                {(s.status === "ACTIVE" || s.status === "TRIAL") && (
+                  <button
+                    disabled={busy}
+                    onClick={() => onImpersonate(s)}
+                    className="rounded-lg p-1.5 text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition disabled:opacity-40 disabled:pointer-events-none"
+                    title="Log in as this salon's admin"
+                  >
+                    <LogIn className="h-4 w-4" />
+                  </button>
+                )}
                 {s.status !== "ARCHIVED" && <button
+                  disabled={busy}
                   onClick={() => onDelete(s)}
-                  className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition disabled:opacity-40 disabled:pointer-events-none"
                   title="Archive Salon"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -914,16 +1097,16 @@ export function SubscriptionsView({
           }
 
           return (
-            <tr key={x.id} className="hover:bg-zinc-50/50 transition">
+            <tr key={x.id} className="hover:bg-muted/40 transition">
               <td data-label="Salon" className="px-5 py-4">
                 <b>{x.salonName}</b>
-                <p className="text-xs text-zinc-500 font-mono">{x.code}</p>
+                <p className="text-xs text-muted-foreground font-mono">{x.code}</p>
               </td>
               <td data-label="Plan" className="px-5 py-4">
                 <select
                   value={x.subscriptionPlan}
                   onChange={(e) => onUpgradePlan(x, e.target.value)}
-                  className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-800 outline-none hover:border-zinc-400 transition"
+                  className="h-8 rounded-lg border border-input bg-card px-2.5 text-xs font-semibold text-foreground/80 outline-none transition hover:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
                 >
                   <option value="Starter">Starter</option>
                   <option value="Professional">Professional</option>
@@ -935,7 +1118,7 @@ export function SubscriptionsView({
               </td>
               <td data-label="Trial ends" className="px-5 py-4">
                 <div>
-                  <span className="text-xs text-zinc-700 font-medium block">{date(x.trialEndsAt)}</span>
+                  <span className="text-xs text-foreground/80 font-medium block">{date(x.trialEndsAt)}</span>
                   {trialDaysLeft !== null && (
                     <span
                       className={`text-[11px] font-bold ${
@@ -951,14 +1134,14 @@ export function SubscriptionsView({
                   )}
                 </div>
               </td>
-              <td data-label="Started" className="px-5 py-4 text-xs text-zinc-500">
+              <td data-label="Started" className="px-5 py-4 text-xs text-muted-foreground">
                 {date(x.createdAt)}
               </td>
               <td data-label="Actions" className="px-5 py-4 text-right">
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={() => onExtendTrial(x)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition"
+                    className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60 transition"
                   >
                     <Clock className="h-3 w-3" /> Extend Trial
                   </button>
@@ -998,6 +1181,8 @@ export function UsersView({
   onResetPassword,
   roles,
   onAssignPlatformRole,
+  onRevokeSessions,
+  busy,
 }: {
   items: PlatformUser[];
   loading: boolean;
@@ -1006,6 +1191,8 @@ export function UsersView({
   onResetPassword: (u: PlatformUser) => void;
   roles: { id: string; name: string }[];
   onAssignPlatformRole: (user: PlatformUser, platformRoleId: string | null) => void;
+  onRevokeSessions: (u: PlatformUser) => void;
+  busy?: boolean;
 }) {
   const [search, setSearch] = useState("");
 
@@ -1025,9 +1212,9 @@ export function UsersView({
         </button>
       }
     >
-      <div className="border-b border-zinc-100 p-4 sm:px-6 bg-zinc-50/50">
+      <div className="border-b border-border p-4 sm:px-6 bg-muted/40">
         <label className="relative block max-w-sm">
-          <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1047,13 +1234,13 @@ export function UsersView({
         }
       >
         {filtered.map((u) => (
-          <tr key={u.id} className="hover:bg-zinc-50/50 transition">
+          <tr key={u.id} className="hover:bg-muted/40 transition">
             <td data-label="User" className="px-5 py-4">
               <div className="flex gap-3 items-center">
                 <Avatar name={u.name} round />
                 <div>
-                  <b className="text-sm font-bold text-zinc-900">{u.name}</b>
-                  <p className="text-xs text-zinc-500">{u.email}</p>
+                  <b className="text-sm font-bold text-foreground">{u.name}</b>
+                  <p className="text-xs text-muted-foreground">{u.email}</p>
                 </div>
               </div>
             </td>
@@ -1067,16 +1254,16 @@ export function UsersView({
               >
                 {String(u.role ?? "Unknown").replaceAll("_", " ")}
               </span>
-              {u.role === "PLATFORM_ADMIN" && <select value={u.platformRole?.id ?? ""} onChange={(event) => onAssignPlatformRole(u, event.target.value || null)} className="mt-2 block rounded border border-zinc-200 bg-white px-2 py-1 text-xs"><option value="">Legacy full access</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select>}
+              {u.role === "PLATFORM_ADMIN" && <select value={u.platformRole?.id ?? ""} onChange={(event) => onAssignPlatformRole(u, event.target.value || null)} className="mt-2 block h-8 rounded-lg border border-input bg-card px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/30"><option value="">Legacy full access</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select>}
             </td>
-            <td data-label="Workspace" className="px-5 py-4 text-sm text-zinc-700">
+            <td data-label="Workspace" className="px-5 py-4 text-sm text-foreground/80">
               {u.salon ? (
                 <div>
                   <span className="font-semibold">{u.salon.salonName}</span>
-                  <span className="block text-xs text-zinc-400 font-mono">{u.salon.code}</span>
+                  <span className="block text-xs text-muted-foreground font-mono">{u.salon.code}</span>
                 </div>
               ) : (
-                <span className="text-xs font-semibold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded">
+                <span className="text-xs font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
                   Platform Wide
                 </span>
               )}
@@ -1084,7 +1271,7 @@ export function UsersView({
             <td data-label="Status" className="px-5 py-4">
               <span
                 className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                  u.active ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-500"
+                  u.active ? "bg-emerald-100 text-emerald-800" : "bg-muted/60 text-muted-foreground"
                 }`}
               >
                 {u.active ? "Active" : "Disabled"}
@@ -1093,15 +1280,25 @@ export function UsersView({
             <td data-label="Actions" className="px-5 py-4 text-right">
               <div className="flex items-center justify-end gap-2">
                 <button
+                  disabled={busy}
                   onClick={() => onResetPassword(u)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition"
+                  className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60 transition disabled:opacity-40 disabled:pointer-events-none"
                   title="Reset Password"
                 >
                   <KeyRound className="h-3.5 w-3.5" /> Reset Pass
                 </button>
                 <button
+                  disabled={busy}
+                  onClick={() => onRevokeSessions(u)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted/60 transition disabled:opacity-40 disabled:pointer-events-none"
+                  title="Force-logout all active sessions"
+                >
+                  <LogOut className="h-3.5 w-3.5" /> Revoke Sessions
+                </button>
+                <button
+                  disabled={busy}
                   onClick={() => onToggle(u)}
-                  className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition disabled:opacity-40 disabled:pointer-events-none ${
                     u.active
                       ? "border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100"
                       : "border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
@@ -1121,6 +1318,194 @@ export function UsersView({
 // -------------------------------------------------------------
 // 5. AUDIT LOG VIEW (Actor Resolution & Details)
 // -------------------------------------------------------------
+const domainTone: Record<PlatformWebsite["domainStatus"], string> = {
+  NONE: "bg-muted text-muted-foreground",
+  PENDING_DNS: "bg-amber-100 text-amber-800",
+  VERIFYING: "bg-blue-100 text-blue-800",
+  ACTIVE: "bg-emerald-100 text-emerald-800",
+  FAILED: "bg-red-100 text-red-800",
+};
+
+export function WebsitesView({
+  items,
+  loading,
+  busy,
+  onManage,
+  onUnpublish,
+  onVerify,
+  checks,
+}: {
+  items: PlatformWebsite[];
+  checks?: SystemCheck[] | null;
+  loading: boolean;
+  busy?: boolean;
+  onManage: (salonId: string) => void;
+  onUnpublish: (site: PlatformWebsite) => void;
+  onVerify: (site: PlatformWebsite) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const shown = items.filter((site) => {
+    const q = query.trim().toLowerCase();
+    const matches = !q || site.salonName.toLowerCase().includes(q) || site.slug.includes(q) || (site.customDomain ?? "").includes(q);
+    const state = filter === "all" || (filter === "live" && site.isPublished) || (filter === "draft" && !site.isPublished && site.type !== "NONE") || (filter === "domain" && site.domainStatus !== "NONE" && site.domainStatus !== "ACTIVE");
+    return matches && state;
+  });
+  const live = items.filter((site) => site.isPublished).length;
+  const statusCard = <SystemStatusCard checks={checks ?? null} />;
+  const attention = items.filter((site) => site.domainStatus === "FAILED" || site.domainStatus === "PENDING_DNS").length;
+  return (
+    <div className="space-y-5">
+    {statusCard}
+    <Panel title="Salon websites" subtitle={`${live} live · ${items.length} configured · ${attention} domain${attention === 1 ? "" : "s"} need attention`}>
+      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/40 p-4 sm:px-6">
+        <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search salon, address or domain…" aria-label="Search websites" className={`${inputClass} pl-10`} />
+        </div>
+        <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filter websites" className="h-9 rounded-lg border border-input bg-card px-3 text-xs font-semibold outline-none">
+          <option value="all">All sites</option>
+          <option value="live">Live</option>
+          <option value="draft">Drafts</option>
+          <option value="domain">Domain issues</option>
+        </select>
+      </div>
+      <Table
+        head={["Salon", "Type", "Status", "Address", "Domain", ""]}
+        loading={loading}
+        empty={!shown.length ? { title: "No websites", message: items.length ? "No sites match this filter." : "Websites appear here once a salon sets one up." } : undefined}
+      >
+        {shown.map((site) => (
+          <tr key={site.salonId} className="transition hover:bg-muted/40">
+            <td data-label="Salon" className="px-5 py-4">
+              <b className="block text-sm text-foreground">{site.salonName}</b>
+              <span className="text-xs text-muted-foreground">{site.slug}</span>
+            </td>
+            <td data-label="Type" className="px-5 py-4 text-xs font-semibold capitalize text-foreground/80">{site.type.toLowerCase()}</td>
+            <td data-label="Status" className="px-5 py-4">
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${site.isPublished ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}>{site.isPublished ? "Live" : "Draft"}</span>
+            </td>
+            <td data-label="Address" className="px-5 py-4 text-xs">
+              {site.liveUrl ? <a className="text-primary underline" href={site.liveUrl} target="_blank" rel="noopener noreferrer">{site.liveUrl.replace(/^https?:\/\//, "")}</a> : <span className="text-muted-foreground">—</span>}
+            </td>
+            <td data-label="Domain" className="px-5 py-4 text-xs">
+              {site.customDomain ? (
+                <span title={site.domainError ?? undefined}>
+                  <span className="mr-2">{site.customDomain}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${domainTone[site.domainStatus]}`}>{site.domainStatus.replace("_", " ").toLowerCase()}</span>
+                </span>
+              ) : <span className="text-muted-foreground">—</span>}
+            </td>
+            <td data-label="Actions" className="px-5 py-4 text-right">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {site.customDomain && site.domainStatus !== "ACTIVE" && (
+                  <button type="button" disabled={busy} onClick={() => onVerify(site)} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted disabled:pointer-events-none disabled:opacity-40">Check DNS</button>
+                )}
+                {site.isPublished && (
+                  <button type="button" disabled={busy} onClick={() => onUnpublish(site)} className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:pointer-events-none disabled:opacity-40">Unpublish</button>
+                )}
+                <button type="button" disabled={busy} onClick={() => onManage(site.salonId)} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-foreground/80 hover:bg-muted disabled:pointer-events-none disabled:opacity-40">Manage</button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </Panel>
+    </div>
+  );
+}
+
+export function SessionsView({
+  items,
+  loading,
+  onRevoke,
+  busy,
+}: {
+  items: PlatformSession[];
+  loading: boolean;
+  onRevoke: (session: PlatformSession) => void;
+  busy?: boolean;
+}) {
+  const [impersonatedOnly, setImpersonatedOnly] = useState(true);
+  const filtered = impersonatedOnly
+    ? items.filter((s) => s.impersonatedByUserId)
+    : items;
+
+  return (
+    <Panel
+      title="Active Sessions"
+      subtitle="Live logins across the platform, including support impersonation sessions"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-4 sm:px-6 bg-muted/40">
+        <label className="flex items-center gap-2 text-xs font-semibold text-foreground/70">
+          <input
+            type="checkbox"
+            checked={impersonatedOnly}
+            onChange={(e) => setImpersonatedOnly(e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          Show impersonation sessions only
+        </label>
+      </div>
+      <Table
+        head={["User", "Salon", "Impersonated By", "Started", "Expires", "IP", ""]}
+        loading={loading}
+        empty={
+          !filtered.length
+            ? {
+                title: impersonatedOnly ? "No active impersonation sessions" : "No active sessions",
+                message: impersonatedOnly
+                  ? "Support sessions started via impersonation will appear here while they're live."
+                  : "Signed-in sessions will appear here.",
+              }
+            : undefined
+        }
+      >
+        {filtered.map((s) => (
+          <tr key={s.id} className="hover:bg-muted/40 transition">
+            <td data-label="User" className="px-5 py-4">
+              <b className="text-xs font-bold text-foreground block">{s.user.name}</b>
+              <span className="text-[11px] text-muted-foreground">{s.user.email}</span>
+            </td>
+            <td data-label="Salon" className="px-5 py-4 text-xs text-foreground/70">
+              {s.user.salon?.salonName || "—"}
+            </td>
+            <td data-label="Impersonated By" className="px-5 py-4">
+              {s.impersonatedBy ? (
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                  <ShieldAlert className="h-3 w-3" />
+                  {s.impersonatedBy.name}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              )}
+            </td>
+            <td data-label="Started" className="px-5 py-4 text-xs text-muted-foreground">
+              {new Date(s.createdAt).toLocaleString("en-IN")}
+            </td>
+            <td data-label="Expires" className="px-5 py-4 text-xs text-muted-foreground">
+              {new Date(s.expiresAt).toLocaleString("en-IN")}
+            </td>
+            <td data-label="IP" className="px-5 py-4 font-mono text-xs text-muted-foreground">
+              {s.ipAddress || "—"}
+            </td>
+            <td data-label="Actions" className="px-5 py-4 text-right">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onRevoke(s)}
+                className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                Revoke
+              </button>
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </Panel>
+  );
+}
+
 export function AuditView({
   items,
   loading,
@@ -1144,10 +1529,21 @@ export function AuditView({
   });
 
   return (
-    <Panel title="Platform Activity Audit Trail" subtitle="Chronological record of changes and events">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 p-4 sm:px-6 bg-zinc-50/50">
+    <Panel
+      title="Platform Activity Audit Trail"
+      subtitle="Chronological record of changes and events"
+      action={
+        <a
+          href="/api/platform/audit-log.csv"
+          className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition hover:border-border hover:bg-muted/60 active:scale-[0.98]"
+        >
+          Export CSV
+        </a>
+      }
+    >
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-4 sm:px-6 bg-muted/40">
         <label className="relative block max-w-sm flex-1 min-w-[240px]">
-          <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1158,7 +1554,7 @@ export function AuditView({
         <select
           value={entityFilter}
           onChange={(e) => setEntityFilter(e.target.value)}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold outline-none"
+          className="h-9 rounded-lg border border-input bg-card px-3 text-xs font-semibold outline-none transition focus-visible:ring-3 focus-visible:ring-ring/30"
         >
           <option value="ALL">All Entities</option>
           <option value="SALON">Salon</option>
@@ -1181,153 +1577,37 @@ export function AuditView({
         }
       >
         {filtered.map((x) => (
-          <tr key={x.id} className="hover:bg-zinc-50/50 transition">
+          <tr key={x.id} className="hover:bg-muted/40 transition">
             <td data-label="Actor" className="px-5 py-4">
               <div className="flex items-center gap-2">
-                <div className="h-7 w-7 grid place-items-center rounded-full bg-zinc-900 text-white text-[10px] font-bold">
+                <div className="h-7 w-7 grid place-items-center rounded-full bg-primary text-white text-[10px] font-bold">
                   {(x.actor?.name || "AD").slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <b className="text-xs font-bold text-zinc-900 block">{x.actor?.name || "System Admin"}</b>
-                  <span className="text-[11px] text-zinc-400">{x.actor?.email || "system@dropxcutz.com"}</span>
+                  <b className="text-xs font-bold text-foreground block">{x.actor?.name || "System Admin"}</b>
+                  <span className="text-[11px] text-muted-foreground">{x.actor?.email || "system@dropxcutz.com"}</span>
                 </div>
               </div>
             </td>
-            <td data-label="Action" className="px-5 py-4 font-semibold text-zinc-900">
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2 py-1 text-xs font-mono font-bold text-zinc-800">
-                <FileClock className="h-3 w-3 text-zinc-500" />
+            <td data-label="Action" className="px-5 py-4 font-semibold text-foreground">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted/60 px-2 py-1 text-xs font-mono font-bold text-foreground/80">
+                <FileClock className="h-3 w-3 text-muted-foreground" />
                 {x.action}
               </span>
             </td>
-            <td data-label="Entity" className="px-5 py-4 text-xs font-semibold text-zinc-600">
+            <td data-label="Entity" className="px-5 py-4 text-xs font-semibold text-foreground/70">
               {x.entity}
             </td>
-            <td data-label="Reference" className="px-5 py-4 font-mono text-xs text-zinc-500">
+            <td data-label="Reference" className="px-5 py-4 font-mono text-xs text-muted-foreground">
               {x.entityId || "—"}
             </td>
-            <td data-label="Timestamp" className="px-5 py-4 text-xs text-zinc-500">
+            <td data-label="Timestamp" className="px-5 py-4 text-xs text-muted-foreground">
               {new Date(x.createdAt).toLocaleString("en-IN")}
             </td>
           </tr>
         ))}
       </Table>
     </Panel>
-  );
-}
-
-// -------------------------------------------------------------
-// 6. FINANCIALS VIEW (Platform-wide Analytics)
-// -------------------------------------------------------------
-export function FinancialView({ salons }: { salons: Salon[] }) {
-  const revenue = salons.reduce((sum, salon) => sum + (salon.paidRevenue || 0), 0);
-  const customers = salons.reduce((sum, salon) => sum + (salon._count?.customers || 0), 0);
-  const appointments = salons.reduce((sum, salon) => sum + (salon._count?.appointments || 0), 0);
-  const average = salons.length ? revenue / salons.length : 0;
-  const ranked = [...salons].sort((a, b) => (b.paidRevenue || 0) - (a.paidRevenue || 0));
-
-  const planStats = {
-    Starter: salons.filter((s) => s.subscriptionPlan === "Starter").length,
-    Professional: salons.filter((s) => s.subscriptionPlan === "Professional").length,
-    Enterprise: salons.filter((s) => s.subscriptionPlan === "Enterprise").length,
-  };
-
-  const statCards = [
-    { title: "Total Invoiced Revenue", val: money(revenue), sub: "Paid revenue across platform", Icon: CircleDollarSign },
-    { title: "Average Revenue / Salon", val: money(average), sub: "Across all active workspaces", Icon: TrendingUp },
-    { title: "Platform Client Base", val: String(customers), sub: "Registered salon customers", Icon: Users },
-    { title: "Total Bookings Processed", val: String(appointments), sub: "Appointments completed", Icon: CalendarDays },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {statCards.map(({ title, val, sub, Icon }, idx) => (
-          <motion.div
-            key={title}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.05 }}
-            className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">{title}</p>
-                <p className="mt-2 text-2xl font-bold text-zinc-950">{val}</p>
-                <p className="mt-1 text-xs text-zinc-500">{sub}</p>
-              </div>
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 text-zinc-900">
-                <Icon className="h-5 w-5" />
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-        <Panel title="Revenue Leaderboard by Salon" subtitle="Ranked gross paid revenue per workspace">
-          {!ranked.length ? (
-            <p className="p-8 text-center text-sm text-zinc-500">No salon financial records yet.</p>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {ranked.map((salon, index) => (
-                <div key={salon.id} className="flex items-center gap-4 p-5 hover:bg-zinc-50/50 transition">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-900 text-xs font-bold text-white">
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-bold text-sm text-zinc-900">{salon.salonName}</p>
-                        <p className="text-xs text-zinc-500 font-mono">
-                          {salon.code} • {salon._count?.customers || 0} customers • {salon.subscriptionPlan}
-                        </p>
-                      </div>
-                      <b className="text-sm font-bold text-zinc-950">{money(salon.paidRevenue)}</b>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-100">
-                      <div
-                        style={{
-                          width: `${revenue ? Math.max((salon.paidRevenue / revenue) * 100, 3) : 0}%`,
-                        }}
-                        className="h-full rounded-full bg-zinc-900"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Panel>
-
-        <Panel title="Plan Distribution" subtitle="Active subscription tiers">
-          <div className="p-6 space-y-4">
-            {Object.entries(planStats).map(([plan, count]) => {
-              const pct = salons.length ? Math.round((count / salons.length) * 100) : 0;
-              return (
-                <div key={plan} className="space-y-1.5">
-                  <div className="flex justify-between text-sm font-semibold">
-                    <span className="text-zinc-700">{plan} Tier</span>
-                    <span className="text-zinc-900">{count} salons ({pct}%)</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        plan === "Enterprise"
-                          ? "bg-purple-600"
-                          : plan === "Professional"
-                          ? "bg-blue-600"
-                          : "bg-emerald-600"
-                      }`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
-      </div>
-    </div>
   );
 }
 
@@ -1402,7 +1682,7 @@ export function SettingsView({
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }) {
   if (loading || !settings)
-    return <div className="h-64 animate-pulse rounded-2xl bg-zinc-100" />;
+    return <div className="h-64 animate-pulse rounded-2xl bg-muted/60" />;
 
   return (
     <form onSubmit={onSubmit}>
@@ -1444,7 +1724,7 @@ export function SettingsView({
             defaultValue={settings.passwordMinimumLength}
           />
         </div>
-        <div className="flex justify-end border-t border-zinc-100 bg-zinc-50 p-4 sm:px-6">
+        <div className="flex justify-end border-t border-border bg-muted/60 p-4 sm:px-6">
           <button disabled={submitting} className={buttonClass}>
             {submitting ? "Saving..." : "Save Platform Settings"}
           </button>
@@ -1475,27 +1755,24 @@ export function CreateSalonModal({
   onGeneratePassword: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
+    <ModalOverlay onClose={onClose}>
       <form
         onSubmit={onSubmit}
         role="dialog"
-        className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+        className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl border border-border"
       >
         <header className="flex justify-between items-center border-b p-5 sm:px-7">
           <div>
-            <p className="text-xs font-bold uppercase text-zinc-400">New Workspace</p>
-            <h2 className="text-xl font-bold text-zinc-950">Add Salon Workspace</h2>
+            <p className="text-xs font-bold uppercase text-muted-foreground">New Workspace</p>
+            <h2 className="text-xl font-bold text-foreground">Add Salon Workspace</h2>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
-            <X className="h-5 w-5 text-zinc-500" />
+            <X className="h-5 w-5 text-muted-foreground" />
           </button>
         </header>
         <div className="overflow-y-auto p-5 sm:px-7 space-y-6">
           <div>
-            <b className="text-sm font-bold text-zinc-900 block mb-3">Salon Identity & Location</b>
+            <b className="text-sm font-bold text-foreground block mb-3">Salon Identity & Location</b>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input name="salonName" label="Salon Trade Name" placeholder="Velvet Glow Salon & Spa" required autoFocus />
               <Input name="code" label="Salon URL Code" placeholder="velvet-glow" required />
@@ -1515,8 +1792,8 @@ export function CreateSalonModal({
             </div>
           </div>
 
-          <div className="border-t border-zinc-100 pt-5">
-            <b className="text-sm font-bold text-zinc-900 block mb-3">Initial Administrator Account</b>
+          <div className="border-t border-border pt-5">
+            <b className="text-sm font-bold text-foreground block mb-3">Initial Administrator Account</b>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input name="adminName" label="Administrator Full Name" placeholder="Rohan Sharma" required />
               <Input name="adminEmail" label="Admin Login Email" type="email" placeholder="rohan@velvetglow.com" required />
@@ -1538,7 +1815,7 @@ export function CreateSalonModal({
                     <button
                       type="button"
                       onClick={onGeneratePassword}
-                      className="shrink-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                      className="shrink-0 rounded-xl border border-border bg-muted/60 px-3.5 py-2.5 text-xs font-semibold text-foreground/80 hover:bg-muted/60"
                     >
                       Generate New
                     </button>
@@ -1548,11 +1825,11 @@ export function CreateSalonModal({
             </div>
           </div>
         </div>
-        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
+        <footer className="flex justify-end gap-3 border-t bg-muted/60 p-4 sm:px-7">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700"
+            className={outlineButtonClass}
           >
             Cancel
           </button>
@@ -1561,7 +1838,7 @@ export function CreateSalonModal({
           </button>
         </footer>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1589,24 +1866,21 @@ export function EditSalonModal({
   });
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
+    <ModalOverlay onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit(salon.id, form);
         }}
-        className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+        className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl border border-border"
       >
         <header className="flex justify-between items-center border-b p-5 sm:px-7">
           <div>
-            <p className="text-xs font-bold uppercase text-zinc-400">Edit Salon</p>
-            <h2 className="text-xl font-bold text-zinc-950">{salon.salonName}</h2>
+            <p className="text-xs font-bold uppercase text-muted-foreground">Edit Salon</p>
+            <h2 className="text-xl font-bold text-foreground">{salon.salonName}</h2>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
-            <X className="h-5 w-5 text-zinc-500" />
+            <X className="h-5 w-5 text-muted-foreground" />
           </button>
         </header>
         <div className="overflow-y-auto p-5 sm:px-7 space-y-4">
@@ -1675,11 +1949,11 @@ export function EditSalonModal({
             </Field>
           </div>
         </div>
-        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
+        <footer className="flex justify-end gap-3 border-t bg-muted/60 p-4 sm:px-7">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700"
+            className={outlineButtonClass}
           >
             Cancel
           </button>
@@ -1688,7 +1962,7 @@ export function EditSalonModal({
           </button>
         </footer>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1709,10 +1983,7 @@ export function CreateUserModal({
   const [role, setRole] = useState("PLATFORM_ADMIN");
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
+    <ModalOverlay onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -1726,15 +1997,15 @@ export function CreateUserModal({
             platformRoleId: String(f.get("platformRoleId") || "") || undefined,
           });
         }}
-        className="flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+        className="flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl border border-border"
       >
         <header className="flex justify-between items-center border-b p-5 sm:px-7">
           <div>
-            <p className="text-xs font-bold uppercase text-zinc-400">Security & Credentials</p>
-            <h2 className="text-xl font-bold text-zinc-950">Add Administrator User</h2>
+            <p className="text-xs font-bold uppercase text-muted-foreground">Security & Credentials</p>
+            <h2 className="text-xl font-bold text-foreground">Add Administrator User</h2>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
-            <X className="h-5 w-5 text-zinc-500" />
+            <X className="h-5 w-5 text-muted-foreground" />
           </button>
         </header>
         <div className="overflow-y-auto p-5 sm:px-7 space-y-4">
@@ -1766,11 +2037,11 @@ export function CreateUserModal({
           )}
           {role === "PLATFORM_ADMIN" && <Field label="Platform permission role"><select name="platformRoleId" className={inputClass}><option value="">Legacy full access</option>{roles.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>}
         </div>
-        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
+        <footer className="flex justify-end gap-3 border-t bg-muted/60 p-4 sm:px-7">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700"
+            className={outlineButtonClass}
           >
             Cancel
           </button>
@@ -1779,7 +2050,7 @@ export function CreateUserModal({
           </button>
         </footer>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1798,29 +2069,26 @@ export function ResetPasswordModal({
   const [password, setPassword] = useState("");
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
+    <ModalOverlay onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit(user.id, password);
         }}
-        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl border border-border"
       >
         <header className="flex justify-between items-center border-b p-5">
           <div>
-            <p className="text-xs font-bold uppercase text-zinc-400">Password Reset</p>
-            <h2 className="text-lg font-bold text-zinc-950">{user.name}</h2>
+            <p className="text-xs font-bold uppercase text-muted-foreground">Password Reset</p>
+            <h2 className="text-lg font-bold text-foreground">{user.name}</h2>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
-            <X className="h-5 w-5 text-zinc-500" />
+            <X className="h-5 w-5 text-muted-foreground" />
           </button>
         </header>
         <div className="p-5 space-y-4">
-          <p className="text-xs text-zinc-500">
-            Set a new master password for <b className="text-zinc-900">{user.email}</b>.
+          <p className="text-xs text-muted-foreground">
+            Set a new master password for <b className="text-foreground">{user.email}</b>.
           </p>
           <Field label="New Password (8+ characters)">
             <input
@@ -1836,11 +2104,11 @@ export function ResetPasswordModal({
             />
           </Field>
         </div>
-        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4">
+        <footer className="flex justify-end gap-3 border-t bg-muted/60 p-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700"
+            className={outlineButtonClass}
           >
             Cancel
           </button>
@@ -1849,7 +2117,7 @@ export function ResetPasswordModal({
           </button>
         </footer>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1870,24 +2138,21 @@ export function ExtendTrialModal({
     : new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0]);
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
+    <ModalOverlay onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit(subscription.id, targetDate);
         }}
-        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100"
+        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl border border-border"
       >
         <header className="flex justify-between items-center border-b p-5">
           <div>
-            <p className="text-xs font-bold uppercase text-zinc-400">Trial Extension</p>
-            <h2 className="text-lg font-bold text-zinc-950">{subscription.salonName}</h2>
+            <p className="text-xs font-bold uppercase text-muted-foreground">Trial Extension</p>
+            <h2 className="text-lg font-bold text-foreground">{subscription.salonName}</h2>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
-            <X className="h-5 w-5 text-zinc-500" />
+            <X className="h-5 w-5 text-muted-foreground" />
           </button>
         </header>
         <div className="p-5 space-y-4">
@@ -1909,18 +2174,18 @@ export function ExtendTrialModal({
                   const d = new Date(Date.now() + days * 86400000);
                   setTargetDate(d.toISOString().split("T")[0]);
                 }}
-                className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                className="flex-1 rounded-lg border border-border bg-muted/60 py-1.5 text-xs font-semibold text-foreground/80 hover:bg-muted/60"
               >
                 +{days} Days
               </button>
             ))}
           </div>
         </div>
-        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4">
+        <footer className="flex justify-end gap-3 border-t bg-muted/60 p-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700"
+            className={outlineButtonClass}
           >
             Cancel
           </button>
@@ -1929,7 +2194,7 @@ export function ExtendTrialModal({
           </button>
         </footer>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1944,67 +2209,64 @@ export function SalonDetailsModal({
   onManage: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-zinc-950/60 backdrop-blur-sm sm:items-center sm:p-5"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl border border-zinc-100">
+    <ModalOverlay onClose={onClose}>
+      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-2xl border border-border">
         <header className="flex justify-between items-center border-b p-5 sm:px-7">
           <div className="flex items-center gap-3">
             <Avatar name={salon.salonName} />
             <div>
-              <h2 className="text-xl font-bold text-zinc-950">{salon.salonName}</h2>
-              <p className="text-xs text-zinc-500 font-mono">{salon.code} • {salon.city || "Location pending"}</p>
+              <h2 className="text-xl font-bold text-foreground">{salon.salonName}</h2>
+              <p className="text-xs text-muted-foreground font-mono">{salon.code} • {salon.city || "Location pending"}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:opacity-70">
-            <X className="h-5 w-5 text-zinc-500" />
+            <X className="h-5 w-5 text-muted-foreground" />
           </button>
         </header>
         <div className="overflow-y-auto p-5 sm:px-7 space-y-6">
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl bg-zinc-50 p-4 border border-zinc-100">
-              <p className="text-xs font-semibold text-zinc-400 uppercase">Paid Revenue</p>
-              <p className="text-xl font-bold text-zinc-900 mt-1">{money(salon.paidRevenue)}</p>
+            <div className="rounded-xl bg-muted/60 p-4 border border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Paid Revenue</p>
+              <p className="text-xl font-bold text-foreground mt-1">{money(salon.paidRevenue)}</p>
             </div>
-            <div className="rounded-xl bg-zinc-50 p-4 border border-zinc-100">
-              <p className="text-xs font-semibold text-zinc-400 uppercase">Total Clients</p>
-              <p className="text-xl font-bold text-zinc-900 mt-1">{salon._count?.customers || 0}</p>
+            <div className="rounded-xl bg-muted/60 p-4 border border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Total Clients</p>
+              <p className="text-xl font-bold text-foreground mt-1">{salon._count?.customers || 0}</p>
             </div>
-            <div className="rounded-xl bg-zinc-50 p-4 border border-zinc-100">
-              <p className="text-xs font-semibold text-zinc-400 uppercase">Appointments</p>
-              <p className="text-xl font-bold text-zinc-900 mt-1">{salon._count?.appointments || 0}</p>
+            <div className="rounded-xl bg-muted/60 p-4 border border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Appointments</p>
+              <p className="text-xl font-bold text-foreground mt-1">{salon._count?.appointments || 0}</p>
             </div>
           </div>
 
           <div className="space-y-3 text-sm">
-            <b className="font-bold text-zinc-900 block border-b border-zinc-100 pb-2">Workspace Information</b>
+            <b className="font-bold text-foreground block border-b border-border pb-2">Workspace Information</b>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <span className="text-zinc-500">Legal Entity:</span>
-              <span className="font-semibold text-zinc-900">{salon.legalName || "—"}</span>
-              <span className="text-zinc-500">Official Email:</span>
-              <span className="font-semibold text-zinc-900">{salon.email}</span>
-              <span className="text-zinc-500">Phone:</span>
-              <span className="font-semibold text-zinc-900">{salon.phone || "—"}</span>
-              <span className="text-zinc-500">Subscription Tier:</span>
-              <span className="font-semibold text-zinc-900">{salon.subscriptionPlan}</span>
-              <span className="text-zinc-500">Current Status:</span>
+              <span className="text-muted-foreground">Legal Entity:</span>
+              <span className="font-semibold text-foreground">{salon.legalName || "—"}</span>
+              <span className="text-muted-foreground">Official Email:</span>
+              <span className="font-semibold text-foreground">{salon.email}</span>
+              <span className="text-muted-foreground">Phone:</span>
+              <span className="font-semibold text-foreground">{salon.phone || "—"}</span>
+              <span className="text-muted-foreground">Subscription Tier:</span>
+              <span className="font-semibold text-foreground">{salon.subscriptionPlan}</span>
+              <span className="text-muted-foreground">Current Status:</span>
               <span><StatusBadge value={salon.status} /></span>
-              <span className="text-zinc-500">Created At:</span>
-              <span className="text-zinc-700">{date(salon.createdAt)}</span>
+              <span className="text-muted-foreground">Created At:</span>
+              <span className="text-foreground/80">{date(salon.createdAt)}</span>
             </div>
           </div>
         </div>
-        <footer className="flex justify-end gap-3 border-t bg-zinc-50 p-4 sm:px-7">
-          <button onClick={onManage} className="rounded-xl border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-100">Open salon workspace</button>
+        <footer className="flex justify-end gap-3 border-t bg-muted/60 p-4 sm:px-7">
+          <button onClick={onManage} className={outlineButtonClass}>Open salon workspace</button>
           <button
             onClick={onClose}
-            className="rounded-xl bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+            className={buttonClass}
           >
             Close
           </button>
         </footer>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

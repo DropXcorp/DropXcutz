@@ -23,17 +23,17 @@ export default function CustomerSection() {
   });
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-border bg-card shadow-sm">
 
       {/* Header */}
 
-      <div className="border-b border-zinc-200 px-5 py-4">
+      <div className="border-b border-border px-5 py-4">
 
-        <h3 className="text-lg font-semibold text-zinc-900">
+        <h3 className="text-lg font-semibold text-foreground">
           Customer
         </h3>
 
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Select an existing customer or create a new one.
         </p>
 
@@ -45,18 +45,18 @@ export default function CustomerSection() {
 
         <div className="relative">
 
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" />
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
 
           <input
             placeholder="Search by customer name or phone..."
-            className="h-12 w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-12 pr-4 text-sm outline-none transition focus:border-black focus:bg-white"
+            className="h-12 w-full rounded-xl border border-border bg-muted/60 pl-12 pr-4 text-sm outline-none transition focus:border-black focus:bg-card"
           />
 
         </div>
 
         {/* Action */}
 
-        <button className="inline-flex items-center gap-2 rounded-xl border border-dashed border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50">
+        <button className="inline-flex items-center gap-2 rounded-xl border border-dashed border-border px-4 py-3 text-sm font-medium text-foreground/80 transition hover:bg-muted/60">
 
           <Plus className="h-4 w-4" />
 
@@ -66,13 +66,13 @@ export default function CustomerSection() {
 
         {/* Selected Customer */}
 
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
+        <div className="rounded-2xl border border-border bg-muted/60 p-5">
 
           <div className="flex items-start justify-between">
 
             <div className="flex gap-4">
 
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black text-white">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white">
 
                 <User className="h-6 w-6" />
 
@@ -80,7 +80,7 @@ export default function CustomerSection() {
 
               <div>
 
-                <h4 className="text-lg font-semibold text-zinc-900">
+                <h4 className="text-lg font-semibold text-foreground">
                   {selectedCustomer.name}
                 </h4>
 
@@ -100,9 +100,9 @@ export default function CustomerSection() {
 
             </div>
 
-            <button className="rounded-lg p-2 transition hover:bg-white">
+            <button className="rounded-lg p-2 transition hover:bg-card">
 
-              <ChevronRight className="h-5 w-5 text-zinc-500" />
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
 
             </button>
 
@@ -150,9 +150,9 @@ function InfoCard({
   value,
 }: InfoCardProps) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4">
+    <div className="rounded-xl border border-border bg-card p-4">
 
-      <div className="flex items-center gap-2 text-zinc-500">
+      <div className="flex items-center gap-2 text-muted-foreground">
 
         <Icon className="h-4 w-4" />
 
@@ -162,7 +162,7 @@ function InfoCard({
 
       </div>
 
-      <p className="mt-2 font-semibold text-zinc-900">
+      <p className="mt-2 font-semibold text-foreground">
         {value}
       </p>
 

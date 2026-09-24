@@ -1,6 +1,7 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHash,
   createHmac,
   randomBytes,
   timingSafeEqual,
@@ -13,42 +14,49 @@ type SalonCredentials = {
   webhookSecret?: string;
 };
 
-const encryptionKey = () => {
-  const value = process.env.PAYMENT_CREDENTIALS_ENCRYPTION_KEY?.trim();
+function loadKey(name: string) {
+  const value = process.env[name]?.trim();
   const key = value ? Buffer.from(value, "base64") : null;
-  if (!key || key.length !== 32)
-    throw new ApiError(503, "Salon payment encryption is not configured.");
+  return key && key.length === 32 ? key : null;
+}
+const keyId = (key: Buffer) => createHash("sha256").update(key).digest("hex").slice(0, 8);
+const encryptionKey = () => {
+  const key = loadKey("PAYMENT_CREDENTIALS_ENCRYPTION_KEY");
+  if (!key) throw new ApiError(503, "Salon payment encryption is not configured (PAYMENT_CREDENTIALS_ENCRYPTION_KEY must be a base64 32-byte key).");
   return key;
 };
 
+/** Output format: k<keyId>:iv.tag.cipher — the key id lets you rotate keys (keep the old one in PAYMENT_CREDENTIALS_ENCRYPTION_KEY_PREVIOUS). */
 export function encryptPaymentSecret(value: string) {
+  const key = encryptionKey();
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
-  const encrypted = Buffer.concat([
-    cipher.update(value, "utf8"),
-    cipher.final(),
-  ]);
-  return [
-    iv.toString("base64"),
-    cipher.getAuthTag().toString("base64"),
-    encrypted.toString("base64"),
-  ].join(".");
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  return (
+    "k" + keyId(key) + ":" +
+    [iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(".")
+  );
 }
 
 export function decryptPaymentSecret(value: string) {
-  const [iv, tag, encrypted] = value.split(".");
+  const match = value.match(/^k([0-9a-f]{8}):(.+)$/);
+  const [iv, tag, encrypted] = (match?.[2] ?? value).split(".");
   if (!iv || !tag || !encrypted)
     throw new ApiError(500, "Stored salon payment credentials are invalid.");
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    encryptionKey(),
-    Buffer.from(iv, "base64"),
-  );
-  decipher.setAuthTag(Buffer.from(tag, "base64"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(encrypted, "base64")),
-    decipher.final(),
-  ]).toString("utf8");
+  const candidates = [loadKey("PAYMENT_CREDENTIALS_ENCRYPTION_KEY"), loadKey("PAYMENT_CREDENTIALS_ENCRYPTION_KEY_PREVIOUS")]
+    .flatMap((key) => (key ? [key] : []))
+    .filter((key) => !match || keyId(key) === match[1]);
+  if (candidates.length === 0) throw new ApiError(503, "Salon payment encryption is not configured for the stored credentials.");
+  for (const key of candidates) {
+    try {
+      const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
+      decipher.setAuthTag(Buffer.from(tag, "base64"));
+      return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]).toString("utf8");
+    } catch {
+      // try the next key
+    }
+  }
+  throw new ApiError(503, "Saved payment credentials can no longer be decrypted. The salon must re-enter its Razorpay keys.");
 }
 
 export function salonRazorpayCredentials(salon: {
@@ -137,4 +145,16 @@ export function verifySalonWebhook(
     expected.length === signature.length &&
     timingSafeEqual(Buffer.from(expected), Buffer.from(signature))
   );
+}
+
+/** Verifies a key pair by making a harmless read-only call to Razorpay. */
+export async function testRazorpayCredentials(keyId: string, keySecret: string) {
+  const response = await fetch("https://api.razorpay.com/v1/payments?count=1", {
+    headers: { authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}` },
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => null);
+  if (!response) throw new ApiError(502, "Could not reach Razorpay to verify the keys. Please try again.");
+  if (response.status === 401) throw new ApiError(400, "Razorpay rejected these keys. Check the Key ID and Key Secret (test keys start with rzp_test_, live keys with rzp_live_).");
+  if (!response.ok) throw new ApiError(502, "Razorpay could not verify the keys right now. Please try again.");
+  return { mode: keyId.startsWith("rzp_live_") ? ("live" as const) : ("test" as const) };
 }

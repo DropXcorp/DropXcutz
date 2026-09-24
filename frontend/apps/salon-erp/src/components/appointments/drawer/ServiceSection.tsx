@@ -59,17 +59,17 @@ export default function ServiceSection() {
   );
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-border bg-card shadow-sm">
 
       {/* Header */}
 
-      <div className="border-b border-zinc-200 px-5 py-4">
+      <div className="border-b border-border px-5 py-4">
 
-        <h3 className="text-lg font-semibold text-zinc-900">
+        <h3 className="text-lg font-semibold text-foreground">
           Services
         </h3>
 
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Add one or more services for this appointment.
         </p>
 
@@ -81,13 +81,13 @@ export default function ServiceSection() {
 
         <div className="relative">
 
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" />
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
 
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search services..."
-            className="h-12 w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-12 pr-4 outline-none transition focus:border-black"
+            className="h-12 w-full rounded-xl border border-border bg-muted/60 pl-12 pr-4 outline-none transition focus:border-black"
           />
 
         </div>
@@ -101,21 +101,21 @@ export default function ServiceSection() {
               key={service.id}
               type="button"
               onClick={() => addService(service)}
-              className="flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-left transition hover:border-black hover:bg-white"
+              className="flex items-center justify-between rounded-xl border border-border bg-muted/60 p-4 text-left transition hover:border-black hover:bg-card"
             >
               <div className="flex items-center gap-4">
 
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100">
-                  <Scissors className="h-5 w-5 text-zinc-700" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/60">
+                  <Scissors className="h-5 w-5 text-foreground/80" />
                 </div>
 
                 <div>
 
-                  <h4 className="font-semibold text-zinc-900">
+                  <h4 className="font-semibold text-foreground">
                     {service.name}
                   </h4>
 
-                  <div className="mt-1 flex items-center gap-4 text-sm text-zinc-500">
+                  <div className="mt-1 flex items-center gap-4 text-sm text-muted-foreground">
 
                     <span className="flex items-center gap-1">
                       <Clock3 className="h-4 w-4" />
@@ -133,7 +133,7 @@ export default function ServiceSection() {
 
               </div>
 
-              <Plus className="h-5 w-5 text-zinc-600" />
+              <Plus className="h-5 w-5 text-foreground/70" />
             </button>
           ))}
 
@@ -146,15 +146,15 @@ export default function ServiceSection() {
           {selectedServices.map((service) => (
             <div
               key={service.id}
-              className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-4"
+              className="flex items-center justify-between rounded-xl border border-border bg-card p-4"
             >
               <div>
 
-                <h4 className="font-semibold text-zinc-900">
+                <h4 className="font-semibold text-foreground">
                   {service.name}
                 </h4>
 
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {service.duration} mins • ₹{service.price}
                 </p>
 
@@ -175,17 +175,17 @@ export default function ServiceSection() {
 
       {/* Footer */}
 
-      <div className="border-t border-zinc-200 bg-zinc-50 px-5 py-4">
+      <div className="border-t border-border bg-muted/60 px-5 py-4">
 
         <div className="flex items-center justify-between">
 
           <div>
 
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               Total Duration
             </p>
 
-            <h4 className="font-semibold text-zinc-900">
+            <h4 className="font-semibold text-foreground">
               {totalDuration} mins
             </h4>
 
@@ -193,11 +193,11 @@ export default function ServiceSection() {
 
           <div className="text-right">
 
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               Subtotal
             </p>
 
-            <h3 className="text-2xl font-bold text-zinc-900">
+            <h3 className="text-2xl font-bold text-foreground">
               ₹{totalAmount}
             </h3>
 

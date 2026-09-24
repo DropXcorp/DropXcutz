@@ -1,31 +1,30 @@
-# DropXcutz public salon website
+# DropXcutz public site (multi-tenant)
 
-This is the customer-facing booking website. It does not use ERP/admin authentication.
+One deployment serves **every** salon's template website. The salon is chosen from the visitor's domain:
 
-## Template website
+- `https://<salon-slug>.<PUBLIC_ROOT_DOMAIN>` — automatic for every published salon (one wildcard DNS record).
+- `https://www.theirsalon.com` — a salon's own domain, after DNS verification in the salon dashboard.
 
-Set `NEXT_PUBLIC_SITE_MODE=template` and `NEXT_PUBLIC_SALON_SLUG=<salon-slug>`. It uses the protected slug endpoints at `/api/public/v1/salons/:slug`.
+`proxy.ts` asks the API (`/api/public/v1/sites/resolve`) which salon a host belongs to, then rewrites the request to `/sites/<slug>/…`. Unknown or unpublished hosts get a friendly 404.
 
-## Custom domain website
+## Environment
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | Public API URL ending in `/api` (required in production) |
+| `API_URL` | Optional private API URL for server rendering |
+| `REVALIDATE_SECRET` | Must equal `PUBLIC_SITE_REVALIDATE_SECRET` on the API — lets publishing refresh sites instantly |
 
-Set `NEXT_PUBLIC_SITE_MODE=custom` and `NEXT_PUBLIC_PUBLIC_KEY=<salon integration key>`. Add the deployed domain to the salon's Integration settings; the API validates the browser origin.
+No per-salon variables exist any more. See `../../../DEPLOYMENT.md` for the full walkthrough.
 
-Run `npm install` then `npm run dev`. The default port is 3002.
+## Local development
+```
+bun run dev            # http://localhost:3002
+open http://localhost:3002/?salon=<slug>     # remembered in a cookie
+open http://<slug>.localhost:3002            # Chrome resolves *.localhost automatically
+```
 
-## Deploy on Vercel
+## Pages
+`/` (home: hero, offers, services, gallery, reviews, contact), `/book` (multi-step booking + Razorpay), `/manage/<id>?token=…` (view, pay, cancel), plus `robots.txt` and `sitemap.xml` per host. Templates (`classic`, `modern`, `minimal`) and colours come from the salon's theme JSON.
 
-Create one Vercel project for this customer-facing app and set its **Root
-Directory** to `frontend/apps/public-site`. Vercel will then detect Next.js,
-install this app's dependencies, and serve `app/page.tsx` at `/`.
-
-Set these production environment variables before deploying:
-
-- `NEXT_PUBLIC_API_URL` — the public HTTPS URL of the deployed API, followed
-  by `/api` (for example, `https://api.example.com/api`).
-- `NEXT_PUBLIC_SITE_MODE` — `template` or `custom`.
-- `NEXT_PUBLIC_SALON_SLUG` — required when site mode is `template`.
-- `NEXT_PUBLIC_PUBLIC_KEY` — required when site mode is `custom`.
-
-Do not deploy the repository root as this website: the root is a monorepo and
-does not contain a Next.js application, so Vercel can report a successful build
-while returning `404 NOT_FOUND` at the domain.
+## Custom (developer-built) websites
+Those don't use this app: they call `/api/v1/public/*` with an `X-DropXcutz-Key` header — see **API & Integrations** in the salon dashboard.

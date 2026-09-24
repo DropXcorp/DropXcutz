@@ -11,6 +11,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import DashboardHeader from "@/src/components/dashboard/DashboardHeader";
 import SummaryCard from "@/src/components/dashboard/SummaryCard";
 import QuickActions from "@/src/components/dashboard/QuickActions";
@@ -68,7 +69,6 @@ function FinancialOverview({
         .reduce((sum, invoice) => sum + invoice.amount, 0),
     };
   });
-  const maxMonth = Math.max(...months.map((month) => month.value), 1);
   const recent = [...invoices]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
@@ -77,14 +77,14 @@ function FinancialOverview({
     <section className="space-y-5">
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
             Financial overview
           </p>
-          <h2 className="mt-1 text-2xl font-bold text-zinc-950">
+          <h2 className="mt-1 text-2xl font-bold text-foreground">
             Business performance
           </h2>
         </div>
-        <p className="text-sm text-zinc-500">Live from invoices and payroll</p>
+        <p className="text-sm text-muted-foreground">Live from invoices and payroll</p>
       </div>
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
@@ -113,49 +113,43 @@ function FinancialOverview({
         />
       </div>
       <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Revenue trend</h3>
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Paid invoice collections over the last six months
               </p>
             </div>
             <ArrowUpRight className="h-5 w-5 text-emerald-600" />
           </div>
-          <div className="mt-8 flex h-48 items-end gap-3 sm:gap-5">
-            {months.map((month) => (
-              <div
-                key={month.key}
-                className="flex h-full flex-1 flex-col items-center justify-end gap-2"
-              >
-                <span className="text-xs font-semibold text-zinc-600">
-                  {month.value ? money(month.value) : "₹0"}
-                </span>
-                <div className="flex h-32 w-full items-end rounded-lg bg-zinc-100">
-                  <div
-                    className="w-full rounded-lg bg-zinc-900 transition-all"
-                    style={{
-                      height: `${Math.max((month.value / maxMonth) * 100, month.value ? 8 : 2)}%`,
-                    }}
-                  />
-                </div>
-                <span className="text-xs font-medium text-zinc-500">
-                  {month.label}
-                </span>
-              </div>
-            ))}
+          <div className="mt-6 h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={months} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="erpRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                <YAxis tickLine={false} axisLine={false} fontSize={11} width={44} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : String(v))} />
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 12 }} formatter={(v) => [money(Number(v)), "Collected"]} />
+                <Area type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={2} fill="url(#erpRev)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </section>
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Cash summary</h3>
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Money in versus committed payroll
               </p>
             </div>
-            <DollarSign className="h-5 w-5 text-zinc-500" />
+            <DollarSign className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="mt-6 space-y-4">
             <div className="flex items-center justify-between rounded-xl bg-emerald-50 p-4">
@@ -171,49 +165,49 @@ function FinancialOverview({
               </span>
               <b className="text-amber-900">{money(outstanding)}</b>
             </div>
-            <div className="flex items-center justify-between rounded-xl bg-zinc-100 p-4">
-              <span className="text-sm text-zinc-700">Paid payroll</span>
-              <b className="text-zinc-900">{money(paidPayroll)}</b>
+            <div className="flex items-center justify-between rounded-xl bg-muted/60 p-4">
+              <span className="text-sm text-foreground/80">Paid payroll</span>
+              <b className="text-foreground">{money(paidPayroll)}</b>
             </div>
-            <div className="flex items-center justify-between border-t border-zinc-200 pt-4">
+            <div className="flex items-center justify-between border-t border-border pt-4">
               <span className="font-semibold">Net cash position</span>
               <b className="text-xl">{money(netCash)}</b>
             </div>
           </div>
         </section>
       </div>
-      <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-        <div className="border-b border-zinc-200 p-5">
+      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border p-5">
           <h3 className="text-lg font-semibold">Recent financial activity</h3>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Latest invoices and payment status
           </p>
         </div>
         {recent.length === 0 ? (
-          <p className="p-8 text-center text-sm text-zinc-500">
+          <p className="p-8 text-center text-sm text-muted-foreground">
             No financial activity yet.
           </p>
         ) : (
-          <div className="divide-y divide-zinc-100">
+          <div className="divide-y divide-border">
             {recent.map((invoice) => (
               <div
                 key={invoice.id}
                 className="flex items-center justify-between gap-4 p-4"
               >
                 <div className="flex items-center gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100">
-                    <ReceiptText className="h-5 w-5 text-zinc-700" />
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-muted/60">
+                    <ReceiptText className="h-5 w-5 text-foreground/80" />
                   </div>
                   <div>
                     <p className="font-semibold">
                       {invoice.invoiceNumber ?? "Invoice"}
                     </p>
-                    <p className="text-xs text-zinc-500">{invoice.createdAt}</p>
+                    <p className="text-xs text-muted-foreground">{invoice.createdAt}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold">{money(invoice.amount)}</p>
-                  <span className="text-xs font-medium text-zinc-500">
+                  <span className="text-xs font-medium text-muted-foreground">
                     {invoice.status}
                   </span>
                 </div>
@@ -228,7 +222,8 @@ function FinancialOverview({
 
 export default function DashboardPage() {
   const { appointments, invoices, payroll, customers } = useERPStore();
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const todayAppointments = appointments.filter(
     (item) => item.schedule.date === today,
   );

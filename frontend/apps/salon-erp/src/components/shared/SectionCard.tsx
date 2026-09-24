@@ -12,14 +12,14 @@ export default function SectionCard({
   children,
 }: SectionCardProps) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <div className="border-b border-zinc-200 p-6">
-        <h2 className="text-lg font-semibold text-zinc-900">
+    <div className="rounded-2xl border border-border bg-card shadow-sm">
+      <div className="border-b border-border p-6">
+        <h2 className="text-lg font-semibold text-foreground">
           {title}
         </h2>
 
         {subtitle && (
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             {subtitle}
           </p>
         )}

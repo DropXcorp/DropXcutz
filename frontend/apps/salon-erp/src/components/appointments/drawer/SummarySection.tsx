@@ -26,17 +26,17 @@ export default function SummarySection() {
   };
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-border bg-card shadow-sm">
 
       {/* Header */}
 
-      <div className="border-b border-zinc-200 px-5 py-4">
+      <div className="border-b border-border px-5 py-4">
 
-        <h3 className="text-lg font-semibold text-zinc-900">
+        <h3 className="text-lg font-semibold text-foreground">
           Appointment Summary
         </h3>
 
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Review all appointment details before saving.
         </p>
 
@@ -76,9 +76,9 @@ export default function SummarySection() {
 
         {/* Billing */}
 
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
+        <div className="rounded-2xl border border-border bg-muted/60 p-5">
 
-          <h4 className="mb-4 font-semibold text-zinc-900">
+          <h4 className="mb-4 font-semibold text-foreground">
             Billing Summary
           </h4>
 
@@ -99,7 +99,7 @@ export default function SummarySection() {
               value={`₹${summary.advance}`}
             />
 
-            <div className="border-t border-zinc-200 pt-3">
+            <div className="border-t border-border pt-3">
 
               <Row
                 label="Grand Total"
@@ -165,19 +165,19 @@ function SummaryCard({
   value,
 }: SummaryCardProps) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+    <div className="rounded-xl border border-border bg-muted/60 p-4">
 
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-white">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-card">
 
-        <Icon className="h-5 w-5 text-zinc-700" />
+        <Icon className="h-5 w-5 text-foreground/80" />
 
       </div>
 
-      <p className="text-xs uppercase tracking-wide text-zinc-500">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
 
-      <h4 className="mt-1 font-semibold text-zinc-900">
+      <h4 className="mt-1 font-semibold text-foreground">
         {value}
       </h4>
 
@@ -201,7 +201,7 @@ function Row({
   return (
     <div className="flex items-center justify-between">
 
-      <span className="text-sm text-zinc-600">
+      <span className="text-sm text-foreground/70">
         {label}
       </span>
 
@@ -210,8 +210,8 @@ function Row({
           highlight
             ? "text-lg font-bold text-green-600"
             : bold
-            ? "text-lg font-semibold text-zinc-900"
-            : "font-medium text-zinc-800"
+            ? "text-lg font-semibold text-foreground"
+            : "font-medium text-foreground/80"
         }`}
       >
         {value}

@@ -8,6 +8,7 @@ import { ApiError } from "../middleware/error.middleware";
 import { salonId, ok } from "./http.controller";
 import { loginInput, passwordChangeInput } from "../validators/auth.validator";
 import { createTotpSecret, verifyTotp } from "../services/totp.service";
+import { audit } from "./platform.controller";
 
 const cookieNames = {
   erp: "dropxcutz_erp_session",
@@ -207,8 +208,52 @@ export async function logout(request: Request, response: Response) {
   response.status(204).end();
 }
 
+export async function impersonateSalon(request: Request, response: Response) {
+  const salonId = String(request.params.id);
+  const targetUser = await prisma.user.findFirst({
+    where: { salonId, role: "SALON_ADMIN", active: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!targetUser) throw new ApiError(404, "This salon has no active admin account to impersonate.");
+  const sessionSeconds = 15 * 60;
+  const sessionId = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + sessionSeconds * 1000);
+  const token = jwt.sign(
+    { sub: targetUser.id, sid: sessionId, role: targetUser.role },
+    jwtSecret(),
+    { expiresIn: sessionSeconds },
+  );
+  await prisma.session.create({
+    data: {
+      userId: targetUser.id,
+      tokenHash: tokenHash(sessionId),
+      expiresAt,
+      ipAddress: request.ip,
+      userAgent: request.header("user-agent") ?? null,
+      impersonatedByUserId: response.locals.user?.id ?? null,
+    },
+  });
+  response.setHeader("Set-Cookie", cookie(cookieNames.erp, token, sessionSeconds));
+  await audit(response.locals.user?.id, "SALON_IMPERSONATION_STARTED", "SALON", salonId, { targetUserId: targetUser.id });
+  ok(response, { userId: targetUser.id, expiresAt });
+}
+
 export async function me(_request: Request, response: Response) {
   const user = response.locals.user;
+  const session = response.locals.session;
+  let impersonation = null;
+  if (session?.impersonatedByUserId) {
+    const admin = await prisma.user.findUnique({
+      where: { id: session.impersonatedByUserId },
+      select: { name: true, email: true },
+    });
+    impersonation = {
+      active: true,
+      adminName: admin?.name ?? "Platform admin",
+      adminEmail: admin?.email ?? "",
+      expiresAt: session.expiresAt,
+    };
+  }
   ok(response, {
     user: {
       id: user.id,
@@ -220,7 +265,24 @@ export async function me(_request: Request, response: Response) {
     salon: user.salon
       ? { id: user.salon.id, code: user.salon.code, name: user.salon.salonName }
       : null,
+    impersonation,
   });
+}
+
+export async function stopImpersonation(request: Request, response: Response) {
+  const session = response.locals.session;
+  if (!session?.impersonatedByUserId)
+    throw new ApiError(400, "This session is not an impersonation session.");
+  await prisma.session.delete({ where: { id: session.id } });
+  await audit(
+    session.impersonatedByUserId,
+    "SALON_IMPERSONATION_ENDED",
+    "SALON",
+    response.locals.user?.salonId ?? undefined,
+    { targetUserId: response.locals.user?.id },
+  );
+  response.setHeader("Set-Cookie", cookie(cookieNames.erp, "", 0));
+  response.status(204).end();
 }
 
 export async function changePassword(request: Request, response: Response) {

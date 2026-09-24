@@ -26,6 +26,7 @@ import {
   ShoppingCart,
   Crown,
   Globe,
+  KeyRound,
   CreditCard,
 } from "lucide-react";
 
@@ -34,6 +35,7 @@ import { useERPStore } from "@/src/lib/erp-store";
 
 interface AppSidebarProps {
   mobile?: boolean;
+  onNavigate?: () => void;
 }
 
 const menu = [
@@ -218,6 +220,12 @@ const menu = [
         icon: CreditCard,
       },
       {
+        name: "API & Integrations",
+        href: "/settings/api",
+        icon: KeyRound,
+        feature: "API_INTEGRATIONS",
+      },
+      {
         name: "Website",
         href: "/settings/website",
         icon: Globe,
@@ -232,14 +240,18 @@ const menu = [
   },
 ];
 
-export default function AppSidebar({ mobile = false }: AppSidebarProps) {
+export default function AppSidebar({ mobile = false, onNavigate }: AppSidebarProps) {
   const pathname = usePathname();
   const features = useERPStore((state) => state.features);
+  const allHrefs = menu.flatMap((section) => section.items.map((item) => item.href));
+  const activeHref = allHrefs
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((x, y) => y.length - x.length)[0];
   return (
-    <aside className="flex h-full w-72 flex-col bg-white border-r border-zinc-200 select-none">
+    <aside className={`flex h-full ${mobile ? "w-full" : "w-72"} flex-col bg-card border-r border-border select-none`}>
       {/* Desktop Logo */}
       {!mobile && (
-        <div className="border-b border-zinc-200 px-6 py-5">
+        <div className="border-b border-border px-6 py-5">
           <AppLogo />
         </div>
       )}
@@ -251,25 +263,25 @@ export default function AppSidebar({ mobile = false }: AppSidebarProps) {
           if (!items.length) return null;
           return (
           <div key={section.title} className="mb-6 last:mb-2">
-            <h3 className="mb-2.5 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+            <h3 className="mb-2.5 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
               {section.title}
             </h3>
 
             <div className="space-y-1">
               {items.map((item) => {
                 const Icon = item.icon;
-                const active =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
+                const active = item.href === activeHref;
 
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
                     className={`group flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 transition-all duration-150 ${
                       active
-                        ? "bg-zinc-950 text-white font-medium shadow-sm"
-                        : "text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-950 font-normal"
+                        ? "bg-primary text-white font-medium shadow-sm"
+                        : "text-foreground/70 hover:bg-muted/60 hover:text-foreground font-normal"
                     }`}
                   >
                     <Icon
@@ -277,7 +289,7 @@ export default function AppSidebar({ mobile = false }: AppSidebarProps) {
                       className={
                         active
                           ? "text-white"
-                          : "text-zinc-500 group-hover:text-zinc-950 transition-colors"
+                          : "text-muted-foreground group-hover:text-foreground transition-colors"
                       }
                     />
                     <span className="text-[14px]">{item.name}</span>
@@ -290,17 +302,8 @@ export default function AppSidebar({ mobile = false }: AppSidebarProps) {
       </div>
 
       {/* Footer */}
-      <div className="border-t border-zinc-200 p-4 bg-zinc-50/50">
-        <div className="flex items-center justify-between text-xs text-zinc-500">
-          <div>
-            <span className="font-semibold text-zinc-800">DropXcutz ERP</span>
-            <p className="text-[10px] text-zinc-400">v1.2.0 • Active Node</p>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Connected
-          </span>
-        </div>
+      <div className="border-t border-border bg-muted/60 p-4">
+        <span className="text-xs font-semibold text-foreground/80">DropXcutz ERP</span>
       </div>
     </aside>
   );

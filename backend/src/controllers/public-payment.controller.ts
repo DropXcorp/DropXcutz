@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { ApiError } from "../middleware/error.middleware";
@@ -9,6 +10,7 @@ import {
   verifySalonWebhook,
 } from "../services/salon-razorpay.service";
 import { salonForPublic } from "./public-booking.controller";
+import { markPaymentPaid, notifyPaymentIssue } from "../services/booking-payment.service";
 
 const verifyInput = z.object({
   orderId: z.string().trim().min(1).max(80),
@@ -32,6 +34,9 @@ export async function createPublicPaymentOrder(
     include: { customer: true },
   });
   if (!appointment) throw new ApiError(404, "Appointment not found.");
+  const token = request.header("x-booking-token") ?? "";
+  if (!appointment.manageToken || token.length !== appointment.manageToken.length || !timingSafeEqual(Buffer.from(token), Buffer.from(appointment.manageToken)))
+    throw new ApiError(403, "This booking link is invalid or has expired.");
   if (appointment.paymentStatus === "PAID")
     throw new ApiError(409, "This appointment is already paid.");
   const existing = await prisma.payment.findFirst({
@@ -130,7 +135,7 @@ export async function verifyPublicPayment(
   const saved = await markPaymentPaid(payment.id, value.paymentId);
   response.json({
     data: {
-      status: saved.status,
+      status: saved.payment.status,
       appointmentNumber: payment.appointment.appointmentNumber,
     },
   });
@@ -143,11 +148,15 @@ export async function handleSalonRazorpayWebhook(
   const rawBody = request.body as Buffer;
   if (!Buffer.isBuffer(rawBody))
     throw new ApiError(400, "Invalid webhook body.");
-  const event = JSON.parse(rawBody.toString("utf8")) as {
+  const parsed = JSON.parse(rawBody.toString("utf8"));
+  const event = parsed as {
     event?: string;
-    payload?: { payment?: { entity?: { order_id?: string; id?: string } } };
+    payload?: {
+      payment?: { entity?: { order_id?: string; id?: string; error_description?: string } };
+      order?: { entity?: { id?: string } };
+    };
   };
-  const orderId = event.payload?.payment?.entity?.order_id;
+  const orderId = event.payload?.payment?.entity?.order_id ?? event.payload?.order?.entity?.id;
   if (!orderId) {
     response.status(204).end();
     return;
@@ -171,38 +180,37 @@ export async function handleSalonRazorpayWebhook(
     )
   )
     throw new ApiError(401, "Invalid Razorpay webhook signature.");
-  if (event.event === "payment.captured" && event.payload?.payment?.entity?.id)
-    await markPaymentPaid(payment.id, event.payload.payment.entity.id);
-  response.status(204).end();
-}
 
-async function markPaymentPaid(paymentId: string, razorpayPaymentId: string) {
-  return prisma.$transaction(async (tx) => {
-    const payment = await tx.payment.findUniqueOrThrow({
-      where: { id: paymentId },
+  const eventId = "salon:" + (request.header("x-razorpay-event-id") ?? createHash("sha256").update(rawBody).digest("hex"));
+  try {
+    await prisma.razorpayWebhookEvent.create({
+      data: { eventId, eventType: event.event ?? "unknown", payload: parsed },
     });
-    if (payment.status === "PAID") return payment;
-    const updated = await tx.payment.update({
-      where: { id: payment.id },
-      data: { status: "PAID", razorpayPaymentId, paidAt: new Date() },
-    });
-    if (payment.appointmentId) {
-      const appointment = await tx.appointment.findUniqueOrThrow({
-        where: { id: payment.appointmentId },
-      });
-      const amountPaid =
-        Number(appointment.amountPaid) + Number(payment.amount);
-      await tx.appointment.update({
-        where: { id: appointment.id },
-        data: {
-          amountPaid,
-          paymentStatus:
-            amountPaid >= Number(appointment.totalAmount)
-              ? "PAID"
-              : "PARTIALLY_PAID",
-        },
-      });
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2002") {
+      response.status(204).end();
+      return;
     }
-    return updated;
-  });
+    throw error;
+  }
+
+  try {
+    const razorpayPaymentId = event.payload?.payment?.entity?.id;
+    if ((event.event === "payment.captured" || event.event === "order.paid") && razorpayPaymentId) {
+      await markPaymentPaid(payment.id, razorpayPaymentId);
+    } else if (event.event === "payment.failed") {
+      await notifyPaymentIssue(
+        payment.appointment.salonId,
+        "Online payment failed",
+        "Payment for " + payment.appointment.appointmentNumber + " failed: " + (event.payload?.payment?.entity?.error_description ?? "the customer's bank declined it") + ". The customer can retry from their booking link.",
+      );
+    }
+    await prisma.razorpayWebhookEvent.update({ where: { eventId }, data: { processedAt: new Date() } });
+  } catch (error) {
+    await prisma.razorpayWebhookEvent
+      .update({ where: { eventId }, data: { processingError: String(error).slice(0, 500) } })
+      .catch(() => undefined);
+    throw error;
+  }
+  response.status(204).end();
 }

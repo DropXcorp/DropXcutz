@@ -231,6 +231,12 @@ export type ERPSalon = {
   name: string;
 };
 
+export type ERPImpersonation = {
+  adminName: string;
+  adminEmail: string;
+  expiresAt: string;
+} | null;
+
 type Snapshot = {
   customers: Customer[];
   employees: Employee[];
@@ -264,6 +270,7 @@ type ERPState = Snapshot & {
   integration: SalonIntegration | null;
   currentUser: ERPUser | null;
   currentSalon: ERPSalon | null;
+  impersonation: ERPImpersonation;
   subscription: Snapshot["subscription"];
   features: string[];
   website: Snapshot["website"];
@@ -276,7 +283,7 @@ type ERPState = Snapshot & {
   clearError: () => void;
   clearSuccess: () => void;
   resetSession: () => void;
-  setIdentity: (user: ERPUser, salon: ERPSalon | null) => void;
+  setIdentity: (user: ERPUser, salon: ERPSalon | null, impersonation?: ERPImpersonation) => void;
 
   // Customers
   addCustomer: (
@@ -519,6 +526,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
   integration: null,
   currentUser: null,
   currentSalon: null,
+  impersonation: null,
   subscription: null,
   features: [],
   website: null,
@@ -552,6 +560,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
       integration: null,
       currentUser: null,
       currentSalon: null,
+      impersonation: null,
       subscription: null,
       features: [],
       website: null,
@@ -561,7 +570,8 @@ export const useERPStore = create<ERPState>((set, get) => ({
       error: null,
       successMessage: null,
     }),
-  setIdentity: (user, salon) => set({ currentUser: user, currentSalon: salon }),
+  setIdentity: (user, salon, impersonation = null) =>
+    set({ currentUser: user, currentSalon: salon, impersonation }),
 
   hydrate: async () => {
     if (get().hydrated) return;
@@ -1132,8 +1142,8 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   fetchWebsiteSettings: async () => {
     try {
-      const item = await api<WebsiteSettings | null>("/website-settings");
-      set({ websiteSettings: item });
+      const item = await api<{ settings: WebsiteSettings | null } | null>("/website-settings");
+      set({ websiteSettings: item?.settings ?? null });
     } catch (error) {
       set({ error: message(error) });
     }
@@ -1141,11 +1151,11 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   saveWebsiteSettings: async (input) => {
     try {
-      const item = await api<WebsiteSettings>("/website-settings", {
+      const item = await api<{ settings: WebsiteSettings | null }>("/website-settings", {
         method: "PUT",
         body: JSON.stringify(input),
       });
-      set({ websiteSettings: item, successMessage: "Website settings saved." });
+      set({ websiteSettings: item.settings, successMessage: "Website settings saved." });
     } catch (error) {
       set({ error: message(error) });
     }

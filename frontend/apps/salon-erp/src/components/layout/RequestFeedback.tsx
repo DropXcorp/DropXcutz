@@ -1,41 +1,42 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+
+type StartDetail = { requestId: string; button: unknown };
 
 export default function RequestFeedback() {
   const requests = useRef(new Map<string, HTMLButtonElement>());
-  const buttons = useRef(new Map<HTMLButtonElement, { count: number; html: string }>());
+  const buttons = useRef(new Map<HTMLButtonElement, number>());
+  const [pending, setPending] = useState(0);
 
   useEffect(() => {
     const start = (event: Event) => {
-      const detail = (event as CustomEvent<{ requestId: string; button: unknown }>).detail;
+      const detail = (event as CustomEvent<StartDetail>).detail;
+      setPending((count) => count + 1);
       const button = detail?.button instanceof HTMLButtonElement ? detail.button : null;
-      if (!button || button.dataset.navigation === "true") return;
-      const current = buttons.current.get(button);
-      if (current) current.count += 1;
-      else {
-        buttons.current.set(button, { count: 1, html: button.innerHTML });
-        button.disabled = true;
+      if (!button || button.dataset.navigation === "true" || !detail.requestId) return;
+      const count = buttons.current.get(button) ?? 0;
+      buttons.current.set(button, count + 1);
+      if (count === 0) {
         button.setAttribute("aria-busy", "true");
-        button.classList.add("cursor-wait", "opacity-70");
-        button.textContent = "Working…";
+        button.dataset.loading = "true";
       }
       requests.current.set(detail.requestId, button);
     };
     const end = (event: Event) => {
       const detail = (event as CustomEvent<{ requestId: string }>).detail;
+      setPending((count) => Math.max(0, count - 1));
       const button = requests.current.get(detail?.requestId);
       if (!button) return;
       requests.current.delete(detail.requestId);
-      const current = buttons.current.get(button);
-      if (!current) return;
-      current.count -= 1;
-      if (current.count > 0) return;
-      button.innerHTML = current.html;
-      button.disabled = false;
-      button.removeAttribute("aria-busy");
-      button.classList.remove("cursor-wait", "opacity-70");
+      const count = (buttons.current.get(button) ?? 1) - 1;
+      if (count > 0) {
+        buttons.current.set(button, count);
+        return;
+      }
       buttons.current.delete(button);
+      button.removeAttribute("aria-busy");
+      delete button.dataset.loading;
     };
     window.addEventListener("dropxcutz:request-start", start);
     window.addEventListener("dropxcutz:request-end", end);
@@ -44,5 +45,15 @@ export default function RequestFeedback() {
       window.removeEventListener("dropxcutz:request-end", end);
     };
   }, []);
-  return null;
+
+  if (!pending) return null;
+  return (
+    <div
+      role="status"
+      aria-label="Loading"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[200] h-0.5 overflow-hidden bg-primary/10"
+    >
+      <div className="request-bar h-full w-1/3 rounded-full bg-primary" />
+    </div>
+  );
 }
