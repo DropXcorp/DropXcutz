@@ -1,7 +1,21 @@
 import { z } from "zod";
 
 const requiredText = z.string().trim().min(1).max(200);
+const personName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[\p{L}\s'.-]+$/u, "Enter a valid name using letters only.");
 const optionalText = z.string().trim().max(5000).optional().nullable();
+const phoneNumber = z
+  .string()
+  .trim()
+  .regex(/^\d{10}$/, "Enter a valid 10-digit phone number.");
+const optionalPhoneNumber = z.preprocess(
+  (value) => (value == null || (typeof value === "string" && value.trim() === "") ? undefined : value),
+  phoneNumber.optional(),
+);
 const money = z.coerce.number().finite().min(0).max(999_999_999.99);
 const nonNegativeInt = z.coerce.number().int().min(0);
 const optionalEmail = z.preprocess(
@@ -29,7 +43,7 @@ const salonCode = z
 
 export const customerInput = z.object({
   name: requiredText,
-  phone: z.string().trim().min(5).max(30),
+  phone: phoneNumber,
   email: optionalEmail,
   membership: z.enum(["Standard", "Silver", "Gold"]).default("Standard"),
   points: nonNegativeInt.optional(),
@@ -42,7 +56,7 @@ export const customerPatch = customerInput.partial();
 export const employeeInput = z.object({
   name: requiredText,
   role: requiredText,
-  phone: z.string().trim().min(5).max(30),
+  phone: phoneNumber,
   email: optionalEmail,
   baseSalary: money,
   commissionRate: z.coerce.number().finite().min(0).max(100).default(10),
@@ -82,7 +96,7 @@ const appointmentService = z.object({
 });
 
 export const appointmentInput = z.object({
-  customer: z.object({ id: z.string().min(1), name: requiredText, phone: z.string().trim().min(5).optional() }),
+  customer: z.object({ id: z.string().min(1), name: personName, phone: optionalPhoneNumber }),
   stylist: z.object({ id: z.string().min(1), name: z.string().optional() }),
   appointment: z.object({
     appointmentNumber: z.string().trim().max(40).optional(),
@@ -118,6 +132,12 @@ export const invoiceInput = z.object({
   customerId: z.string().min(1),
   appointmentId: z.string().min(1).optional().nullable(),
   amount: money,
+  amountReceived: money.optional(),
+  couponCode: z
+    .preprocess(
+      (value) => (value == null || (typeof value === "string" && value.trim() === "") ? undefined : value),
+      z.string().trim().max(40).optional(),
+    ),
   status: z
     .enum(["Paid", "Pending", "Partially Paid", "Refunded"])
     .default("Pending"),
@@ -142,7 +162,7 @@ export const settingsInput = z.object({
   legalName: requiredText,
   gstin: z.string().trim().max(20),
   logoUrl: z.string().trim().max(2000),
-  phone: z.string().trim().min(5).max(30),
+  phone: phoneNumber,
   email: z.string().trim().email().max(200),
   website: z.string().trim().max(2000),
   address: z.string().trim().max(500),

@@ -13,4 +13,8 @@ export const offerInput = z
   .refine((x) => x.endDate > x.startDate, {
     path: ["endDate"],
     message: "End date must follow start date.",
+  })
+  .refine((x) => x.discountType !== "PERCENTAGE" || x.discount <= 100, {
+    path: ["discount"],
+    message: "A percentage discount cannot exceed 100.",
   });

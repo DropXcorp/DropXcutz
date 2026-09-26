@@ -256,7 +256,7 @@ export function Navigation({
   choose: (s: Section) => void;
 }) {
   return (
-    <nav className="flex-1 space-y-1 px-3 py-5">
+    <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-5">
       <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
         Platform Control
       </p>

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../config/prisma";
+import { ApiError } from "../middleware/error.middleware";
 import {
   assertOwned,
   createInvoice,
@@ -62,11 +63,25 @@ export async function updateInvoice(request: Request, response: Response) {
     await assertOwned("customer", input.customerId, currentSalonId);
   if (input.appointmentId)
     await assertOwned("appointment", input.appointmentId, currentSalonId);
+  const statusToDb = {
+    Paid: "PAID",
+    Pending: "PENDING",
+    "Partially Paid": "PARTIALLY_PAID",
+    Refunded: "REFUNDED",
+  } as const;
   const item = await prisma.$transaction(async (client) => {
     const previous = await client.invoice.findUniqueOrThrow({
       where: { id },
-      select: { customerId: true },
+      select: { customerId: true, appointmentId: true, totalAmount: true, status: true },
     });
+    const finalAmount = input.amount ?? Number(previous.totalAmount);
+    const finalStatus = input.status ?? (Object.entries(statusToDb).find(([, v]) => v === previous.status)?.[0] as keyof typeof statusToDb);
+    const finalAmountPaid =
+      finalStatus === "Paid"
+        ? finalAmount
+        : finalStatus === "Partially Paid"
+          ? Math.min(Math.max(Number(input.amountReceived ?? 0), 0), finalAmount)
+          : 0;
     const item = await client.invoice.update({
       where: { id },
       data: {
@@ -78,24 +93,27 @@ export async function updateInvoice(request: Request, response: Response) {
         subtotal: input.amount,
         totalAmount: input.amount,
       }),
-      ...(input.status !== undefined && {
-        status: {
-          Paid: "PAID",
-          Pending: "PENDING",
-          "Partially Paid": "PARTIALLY_PAID",
-          Refunded: "REFUNDED",
-        }[input.status] as any,
-        amountPaid: input.status === "Paid" ? input.amount : 0,
+      ...((input.amount !== undefined || input.status !== undefined) && {
+        status: statusToDb[finalStatus],
+        amountPaid: finalAmountPaid,
       }),
       ...(input.notes !== undefined && { notes: input.notes || null }),
       },
     });
-    if (item.appointmentId && input.status !== undefined) {
+    const appointmentChanged =
+      input.appointmentId !== undefined && input.appointmentId !== previous.appointmentId;
+    if (appointmentChanged && previous.appointmentId) {
+      await client.appointment.update({
+        where: { id: previous.appointmentId },
+        data: { amountPaid: 0, paymentStatus: "PENDING" },
+      });
+    }
+    if (item.appointmentId && (input.status !== undefined || input.amount !== undefined || appointmentChanged)) {
       await client.appointment.update({
         where: { id: item.appointmentId },
         data: {
-          amountPaid: input.status === "Paid" ? (input.amount ?? Number(item.totalAmount)) : 0,
-          paymentStatus: ({ Paid: "PAID", Pending: "PENDING", "Partially Paid": "PARTIALLY_PAID", Refunded: "REFUNDED" }[input.status] as any),
+          amountPaid: finalAmountPaid,
+          paymentStatus: statusToDb[finalStatus],
         },
       });
     }
@@ -112,9 +130,15 @@ export async function deleteInvoice(request: Request, response: Response) {
   await prisma.$transaction(async (client) => {
     const invoice = await client.invoice.findUniqueOrThrow({
       where: { id },
-      select: { customerId: true },
+      select: { customerId: true, appointmentId: true },
     });
     await client.invoice.delete({ where: { id } });
+    if (invoice.appointmentId) {
+      await client.appointment.update({
+        where: { id: invoice.appointmentId },
+        data: { amountPaid: 0, paymentStatus: "PENDING" },
+      });
+    }
     await refreshCustomerSpend(client, invoice.customerId);
   });
   response.status(204).end();
@@ -135,6 +159,20 @@ export async function updatePayroll(request: Request, response: Response) {
   await assertOwned("payrollRun", id, currentSalonId);
   if (input.employeeId)
     await assertOwned("employee", input.employeeId, currentSalonId);
+  const editsFigures =
+    input.employeeId !== undefined ||
+    input.month !== undefined ||
+    input.baseSalary !== undefined ||
+    input.commission !== undefined ||
+    input.deductions !== undefined;
+  if (editsFigures) {
+    const current = await prisma.payrollRun.findUniqueOrThrow({
+      where: { id },
+      select: { status: true },
+    });
+    if (current.status === "PAID")
+      throw new ApiError(409, "A paid payroll run cannot be edited.");
+  }
   const item = await prisma.payrollRun.update({
     where: { id },
     data: {

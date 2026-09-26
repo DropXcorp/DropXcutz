@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../middleware/error.middleware";
 import { getEffectiveFeatures } from "./feature.service";
+import { applyCoupon, claimCoupon } from "../modules/coupons/coupon.service";
 
 const membershipToDb = {
   Standard: "STANDARD",
@@ -293,6 +294,7 @@ export const invoiceDto = (invoice: any) => ({
   customerId: invoice.customerId,
   appointmentId: invoice.appointmentId ?? undefined,
   amount: toNumber(invoice.totalAmount),
+  amountPaid: toNumber(invoice.amountPaid),
   status: paymentStatusToUi[invoice.status as keyof typeof paymentStatusToUi],
   createdAt: datePart(invoice.issuedAt),
 });
@@ -475,10 +477,12 @@ export async function saveAppointment(
     0,
   );
   const scheduledAt = parseWallTime(input.schedule.date, input.schedule.time);
-  // The client applies discounts/loyalty; accept its final total but never above the catalog subtotal.
+  // The client applies discount/loyalty toggles (10% each, so at most 20% off).
+  // Accept its final total but never outside the range that policy can produce.
   const requestedTotal = Number(input.payment.amount ?? subtotal);
+  const minAllowedTotal = subtotal * 0.8;
   const totalAmount = Number.isFinite(requestedTotal)
-    ? Math.min(Math.max(requestedTotal, 0), subtotal)
+    ? Math.min(Math.max(requestedTotal, minAllowedTotal), subtotal)
     : subtotal;
   const employeeId = input.stylist.id === "unassigned" ? null : input.stylist.id;
   const lines = services.map((service) => ({
@@ -552,15 +556,40 @@ export async function saveAppointment(
         },
         select: { scheduledAt: true, durationMinutes: true },
       });
-      const clash = nearby.some(
+      const overlapping = nearby.filter(
         (item) =>
           item.scheduledAt.getTime() < end &&
           item.scheduledAt.getTime() + item.durationMinutes * 60000 > start,
       );
-      if (clash)
+      if (overlapping.length > 0) {
+        const freeAt = new Date(
+          Math.max(
+            ...overlapping.map(
+              (item) => item.scheduledAt.getTime() + item.durationMinutes * 60000,
+            ),
+          ),
+        );
         throw new ApiError(
           409,
-          "This stylist already has an appointment at that time. Pick another time or stylist.",
+          `This stylist already has an appointment at that time and is free after ${timePart(freeAt)}. Pick another time or stylist.`,
+        );
+      }
+      const scheduledDateOnly = new Date(
+        `${input.schedule.date}T00:00:00.000Z`,
+      );
+      const onLeave = await client.leaveRequest.findFirst({
+        where: {
+          employeeId,
+          status: "APPROVED",
+          startDate: { lte: scheduledDateOnly },
+          endDate: { gte: scheduledDateOnly },
+        },
+        select: { id: true },
+      });
+      if (onLeave)
+        throw new ApiError(
+          409,
+          "This stylist is on approved leave on that date. Pick another stylist or date.",
         );
     }
     const paidStatus = input.payment.status as string;
@@ -596,27 +625,59 @@ export async function createInvoice(salonId: string, input: any) {
   await assertOwned("customer", input.customerId, salonId);
   if (input.appointmentId)
     await assertOwned("appointment", input.appointmentId, salonId);
+  let totalAmount = Number(input.amount);
+  let appliedCoupon: { id: string; code: string; discount: number; usageLimit: number | null } | null = null;
+  if (input.couponCode) {
+    const result = await applyCoupon(salonId, input.couponCode, totalAmount);
+    totalAmount = result.finalAmount;
+    appliedCoupon = {
+      id: result.coupon.id,
+      code: result.coupon.code,
+      discount: result.discount,
+      usageLimit: result.coupon.usageLimit,
+    };
+  }
+  const amountPaid =
+    input.status === "Paid"
+      ? totalAmount
+      : input.status === "Partially Paid"
+        ? Math.min(Math.max(Number(input.amountReceived ?? 0), 0), totalAmount)
+        : 0;
   const invoice = await prisma.$transaction(async (client) => {
-    const created = await client.invoice.create({
-      data: {
-        salonId,
-        invoiceNumber: await nextInvoiceNumber(client, salonId),
-        customerId: input.customerId,
-        appointmentId: input.appointmentId || null,
-        subtotal: input.amount,
-        taxAmount: 0,
-        totalAmount: input.amount,
-        amountPaid: input.status === "Paid" ? input.amount : 0,
-        status:
-          paymentStatusToDb[input.status as keyof typeof paymentStatusToDb],
-        notes: input.notes || null,
-      },
-    });
+    if (appliedCoupon) {
+      const claimed = await claimCoupon(client, appliedCoupon.id, appliedCoupon.usageLimit);
+      if (!claimed)
+        throw new ApiError(400, "This coupon has reached its usage limit.");
+    }
+    let created;
+    try {
+      created = await client.invoice.create({
+        data: {
+          salonId,
+          invoiceNumber: await nextInvoiceNumber(client, salonId),
+          customerId: input.customerId,
+          appointmentId: input.appointmentId || null,
+          subtotal: input.amount,
+          taxAmount: 0,
+          totalAmount,
+          amountPaid,
+          status:
+            paymentStatusToDb[input.status as keyof typeof paymentStatusToDb],
+          notes: appliedCoupon
+            ? `${input.notes ? `${input.notes} ` : ""}[Coupon ${appliedCoupon.code}: -${appliedCoupon.discount.toFixed(2)}]`
+            : input.notes || null,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === "P2002")
+        throw new ApiError(409, "An invoice already exists for this appointment.");
+      throw error;
+    }
     if (input.appointmentId) {
       await client.appointment.update({
         where: { id: input.appointmentId },
         data: {
-          amountPaid: input.status === "Paid" ? input.amount : 0,
+          amountPaid,
           paymentStatus:
             paymentStatusToDb[input.status as keyof typeof paymentStatusToDb],
         },

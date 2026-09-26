@@ -54,6 +54,7 @@ import {
   type Package,
   type MembershipPlan,
   type Coupon,
+  erpApi,
 } from "@/src/lib/erp-store";
 import { employeeForm, validationMessage } from "@/src/lib/form-validation";
 import { downloadInvoicePdf, printInvoicePdf } from "@/src/lib/invoice-pdf";
@@ -373,9 +374,11 @@ function StatCard({
 function DataTable({
   heads,
   children,
+  loading,
 }: {
   heads: string[];
   children: React.ReactNode;
+  loading?: boolean;
 }) {
   const isEmpty = Children.toArray(children).length === 0;
   return (
@@ -392,7 +395,11 @@ function DataTable({
         </thead>
         <tbody className="divide-y divide-border text-foreground/80 [&>tr]:transition-colors [&>tr:hover]:bg-muted/40">{children}</tbody>
       </table>
-      {isEmpty && <p className="px-6 py-10 text-center text-sm text-muted-foreground">Nothing here yet.</p>}
+      {isEmpty && (
+        <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+          {loading ? "Loading…" : "Nothing here yet."}
+        </p>
+      )}
     </div>
   );
 }
@@ -662,7 +669,16 @@ function EmployeesView() {
         >
           <input required name="name" placeholder="Staff Name" className={inputClass} />
           <input required name="role" placeholder="Role (e.g. Senior Stylist)" className={inputClass} />
-          <input required name="phone" placeholder="Phone Number" className={inputClass} />
+          <input
+            required
+            name="phone"
+            type="tel"
+            inputMode="tel"
+            pattern="\d{10}"
+            title="Enter a valid 10-digit phone number."
+            placeholder="Phone Number"
+            className={inputClass}
+          />
           <input required name="baseSalary" type="number" placeholder="Base Salary (₹)" className={inputClass} />
           <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Add Staff
@@ -950,6 +966,35 @@ function BillingView() {
   const [invoiceAppointmentId, setInvoiceAppointmentId] = useState("");
   const [invoiceCustomerId, setInvoiceCustomerId] = useState("");
   const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [newInvoiceStatus, setNewInvoiceStatus] = useState<Invoice["status"]>("Paid");
+  const [amountReceived, setAmountReceived] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponPreview, setCouponPreview] = useState<{ discount: number; finalAmount: number } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponChecking, setCouponChecking] = useState(false);
+
+  async function checkCoupon() {
+    setCouponError(null);
+    setCouponPreview(null);
+    const code = couponCode.trim();
+    const orderAmount = Number(invoiceAmount);
+    if (!code || !orderAmount) {
+      setCouponError("Enter an amount and a coupon code first.");
+      return;
+    }
+    setCouponChecking(true);
+    try {
+      const result = await erpApi<{ discount: number; finalAmount: number }>("/coupons/validate", {
+        method: "POST",
+        body: JSON.stringify({ code, orderAmount }),
+      });
+      setCouponPreview(result);
+    } catch (error) {
+      setCouponError(error instanceof Error ? error.message : "Coupon is invalid or expired.");
+    } finally {
+      setCouponChecking(false);
+    }
+  }
 
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
   const [invoiceQuery, setInvoiceQuery] = useState("");
@@ -1009,16 +1054,16 @@ function BillingView() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const collected = invoices
-    .filter((i) => i.status === "Paid")
-    .reduce((s, i) => s + i.amount, 0);
+  const activeInvoices = invoices.filter((i) => i.status !== "Refunded");
+  const collected = activeInvoices.reduce((s, i) => s + i.amountPaid, 0);
+  const pending = activeInvoices.reduce((s, i) => s + (i.amount - i.amountPaid), 0);
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
           title="Total Invoiced"
-          value={money(invoices.reduce((s, i) => s + i.amount, 0))}
+          value={money(activeInvoices.reduce((s, i) => s + i.amount, 0))}
           subtitle={`${invoices.length} invoices generated`}
           icon={Receipt}
         />
@@ -1030,11 +1075,7 @@ function BillingView() {
         />
         <StatCard
           title="Pending Receivables"
-          value={money(
-            invoices
-              .filter((i) => i.status === "Pending" || i.status === "Partially Paid")
-              .reduce((s, i) => s + i.amount, 0)
-          )}
+          value={money(pending)}
           subtitle="Awaiting settlement"
           icon={CreditCard}
         />
@@ -1050,11 +1091,18 @@ function BillingView() {
               customerId: invoiceCustomerId || String(form.get("customerId")),
               appointmentId: invoiceAppointmentId || undefined,
               amount: invoiceAppointmentId ? Number(invoiceAmount) : Number(form.get("amount")),
-              status: form.get("status") as Invoice["status"],
+              couponCode: couponCode.trim() || undefined,
+              status: newInvoiceStatus,
+              ...(newInvoiceStatus === "Partially Paid" && { amountReceived: Number(amountReceived) || 0 }),
             }));
             setInvoiceAppointmentId("");
             setInvoiceCustomerId("");
             setInvoiceAmount("");
+            setAmountReceived("");
+            setNewInvoiceStatus("Paid");
+            setCouponCode("");
+            setCouponPreview(null);
+            setCouponError(null);
           }}
           className="grid gap-3 p-5 sm:grid-cols-4"
         >
@@ -1083,12 +1131,71 @@ function BillingView() {
             <option value="">Link appointment (optional)...</option>
             {appointments.filter((appointment) => appointment.status !== "Cancelled" && appointment.status !== "No Show").map((appointment) => <option key={appointment.id} value={appointment.id}>{appointment.appointment.appointmentNumber} — {appointment.customer.name}</option>)}
           </select>
-          <input required name="amount" type="number" min="1" step="0.01" placeholder="Total Amount (₹)" className={inputClass} />
-          <select name="status" defaultValue="Paid" className={inputClass}>
+          <input
+            required
+            name="amount"
+            type="number"
+            min="1"
+            step="0.01"
+            placeholder="Total Amount (₹)"
+            className={inputClass}
+            onChange={(event) => {
+              setInvoiceAmount(event.target.value);
+              setCouponPreview(null);
+              setCouponError(null);
+            }}
+          />
+          <div className="flex gap-2 sm:col-span-2">
+            <input
+              name="couponCode"
+              placeholder="Discount Code (optional)"
+              value={couponCode}
+              onChange={(event) => {
+                setCouponCode(event.target.value);
+                setCouponPreview(null);
+                setCouponError(null);
+              }}
+              className={inputClass}
+            />
+            <button
+              type="button"
+              onClick={checkCoupon}
+              disabled={couponChecking || !couponCode.trim()}
+              className="shrink-0 rounded-lg border border-border px-3 text-sm font-medium text-foreground/80 transition hover:bg-muted disabled:opacity-50"
+            >
+              {couponChecking ? "Checking..." : "Apply"}
+            </button>
+          </div>
+          <select
+            name="status"
+            value={newInvoiceStatus}
+            onChange={(event) => setNewInvoiceStatus(event.target.value as Invoice["status"])}
+            className={inputClass}
+          >
             <option value="Paid">Paid</option>
             <option value="Pending">Pending</option>
             <option value="Partially Paid">Partially Paid</option>
           </select>
+          {newInvoiceStatus === "Partially Paid" && (
+            <input
+              name="amountReceived"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="Amount Received Now (₹)"
+              value={amountReceived}
+              onChange={(event) => setAmountReceived(event.target.value)}
+              className={inputClass}
+            />
+          )}
+          {couponPreview && (
+            <p className="text-sm text-emerald-600 sm:col-span-4">
+              Coupon applied: -{money(couponPreview.discount)} → new total {money(couponPreview.finalAmount)}
+            </p>
+          )}
+          {couponError && (
+            <p className="text-sm text-red-600 sm:col-span-4">{couponError}</p>
+          )}
           <button className={primaryButtonClass}>
             <Plus className="h-4 w-4" /> Issue Invoice
           </button>
@@ -1259,7 +1366,7 @@ function PayrollView() {
 // 7. BRANCHES VIEW
 // -------------------------------------------------------------
 function BranchesView() {
-  const { branches, addBranch, updateBranch, toggleBranchStatus, deleteBranch } = useERPStore();
+  const { branches, addBranch, updateBranch, toggleBranchStatus, deleteBranch, moduleLoading } = useERPStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ name: string; code: string; city: string; phone: string }>({
     name: "",
@@ -1315,7 +1422,7 @@ function BranchesView() {
       </SectionPanel>
 
       <SectionPanel title="Salon Outlets" subtitle={`${branches.length} configured locations`}>
-        <DataTable heads={["Branch Name", "Code", "City", "Phone", "Status", "Actions"]}>
+        <DataTable heads={["Branch Name", "Code", "City", "Phone", "Status", "Actions"]} loading={moduleLoading.branches}>
           {branches.map((b) => {
             const isEditing = editingId === b.id;
             const isActive = b.status === "ACTIVE";
@@ -1429,7 +1536,7 @@ function BranchesView() {
 // 8. ATTENDANCE VIEW
 // -------------------------------------------------------------
 function AttendanceView() {
-  const { attendance, employees, branches, fetchAttendance, recordAttendance, checkOutAttendance, updateAttendance } = useERPStore();
+  const { attendance, employees, branches, fetchAttendance, recordAttendance, checkOutAttendance, updateAttendance, moduleLoading } = useERPStore();
   const today = new Date().toLocaleDateString("en-CA");
   const [selectedDate, setSelectedDate] = useState(today);
   const [employeeFilter, setEmployeeFilter] = useState("");
@@ -1515,7 +1622,7 @@ function AttendanceView() {
       </SectionPanel>
 
       <SectionPanel title="Attendance Logs" subtitle={`Attendance for ${new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`}>
-        <DataTable heads={["Staff Name", "Check in", "Check out", "Hours", "Status", "Actions"]}>
+        <DataTable heads={["Staff Name", "Check in", "Check out", "Hours", "Status", "Actions"]} loading={moduleLoading.attendance}>
           {dayRecords.map((a) => {
             const emp = employees.find((e) => e.id === a.employeeId);
             return (
@@ -1552,7 +1659,7 @@ function AttendanceView() {
 // 9. EXPENSES VIEW
 // -------------------------------------------------------------
 function ExpensesView() {
-  const { expenses, addExpense, updateExpense, deleteExpense } = useERPStore();
+  const { expenses, addExpense, updateExpense, deleteExpense, moduleLoading } = useERPStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ title: string; category: string; amount: number }>({
     title: "",
@@ -1624,7 +1731,7 @@ function ExpensesView() {
       </SectionPanel>
 
       <SectionPanel title="Expense Ledger" subtitle="Detailed spending log">
-        <DataTable heads={["Expense Title", "Category", "Amount", "Actions"]}>
+        <DataTable heads={["Expense Title", "Category", "Amount", "Actions"]} loading={moduleLoading.expenses}>
           {expenses.map((e) => {
             const isEditing = editingId === e.id;
             return (
@@ -1719,7 +1826,7 @@ function ExpensesView() {
 // 10. SUPPLIERS VIEW
 // -------------------------------------------------------------
 function SuppliersView() {
-  const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useERPStore();
+  const { suppliers, addSupplier, updateSupplier, deleteSupplier, moduleLoading } = useERPStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
     name: string;
@@ -1780,7 +1887,7 @@ function SuppliersView() {
       </SectionPanel>
 
       <SectionPanel title="Vendor Directory" subtitle={`${suppliers.length} active suppliers`}>
-        <DataTable heads={["Supplier", "Representative", "Phone", "Email", "Actions"]}>
+        <DataTable heads={["Supplier", "Representative", "Phone", "Email", "Actions"]} loading={moduleLoading.suppliers}>
           {suppliers.map((s) => {
             const isEditing = editingId === s.id;
             return (
@@ -1878,7 +1985,7 @@ function SuppliersView() {
 // 11. PACKAGES VIEW
 // -------------------------------------------------------------
 function PackagesView() {
-  const { packages, addPackage, updatePackage, deletePackage } = useERPStore();
+  const { packages, addPackage, updatePackage, deletePackage, moduleLoading } = useERPStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
     name: string;
@@ -1940,7 +2047,7 @@ function PackagesView() {
       </SectionPanel>
 
       <SectionPanel title="Available Packages" subtitle="Promotional bundles">
-        <DataTable heads={["Package Name", "Description", "Price", "Validity", "Status", "Actions"]}>
+        <DataTable heads={["Package Name", "Description", "Price", "Validity", "Status", "Actions"]} loading={moduleLoading.packages}>
           {packages.map((p) => {
             const isEditing = editingId === p.id;
             return (
@@ -2053,7 +2160,7 @@ function PackagesView() {
 // 12. COUPONS VIEW
 // -------------------------------------------------------------
 function CouponsView() {
-  const { coupons, addCoupon, updateCoupon, deleteCoupon } = useERPStore();
+  const { coupons, addCoupon, updateCoupon, deleteCoupon, moduleLoading } = useERPStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
     code: string;
@@ -2118,7 +2225,7 @@ function CouponsView() {
       </SectionPanel>
 
       <SectionPanel title="Active Coupons" subtitle="Promotional codes">
-        <DataTable heads={["Coupon Code", "Type", "Discount", "Min Spend", "Status", "Actions"]}>
+        <DataTable heads={["Coupon Code", "Type", "Discount", "Min Spend", "Status", "Actions"]} loading={moduleLoading.coupons}>
           {coupons.map((c) => {
             const isEditing = editingId === c.id;
             return (
@@ -2234,7 +2341,7 @@ function CouponsView() {
 // 13. REVIEWS VIEW
 // -------------------------------------------------------------
 function ReviewsView() {
-  const { reviews, customers, addReview } = useERPStore();
+  const { reviews, customers, addReview, moduleLoading } = useERPStore();
 
   const avgRating = reviews.length
     ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
@@ -2294,7 +2401,7 @@ function ReviewsView() {
       </SectionPanel>
 
       <SectionPanel title="Customer Testimonials" subtitle="Feedback history">
-        <DataTable heads={["Customer", "Rating", "Comment", "Date"]}>
+        <DataTable heads={["Customer", "Rating", "Comment", "Date"]} loading={moduleLoading.reviews}>
           {reviews.map((r) => {
             const cust = customers.find((c) => c.id === r.customerId);
             return (
@@ -2795,7 +2902,7 @@ function SettingsView() {
 // 18. MEMBERSHIPS VIEW (Phase 2)
 // -------------------------------------------------------------
 function MembershipsView() {
-  const { membershipPlans, customers, addMembershipPlan, updateMembershipPlan, deleteMembershipPlan, assignMembership } = useERPStore();
+  const { membershipPlans, customers, addMembershipPlan, updateMembershipPlan, deleteMembershipPlan, assignMembership, moduleLoading } = useERPStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
     name: string;
@@ -2929,7 +3036,7 @@ function MembershipsView() {
       </div>
 
       <SectionPanel title="Configured Membership Plans" subtitle="Active loyalty tiers and perks">
-        <DataTable heads={["Tier Name", "Price", "Validity", "Discount Perk", "Points Boost", "Actions"]}>
+        <DataTable heads={["Tier Name", "Price", "Validity", "Discount Perk", "Points Boost", "Actions"]} loading={moduleLoading.memberships}>
           {membershipPlans.map((p) => {
             const isEditing = editingId === p.id;
             return (
@@ -3046,7 +3153,7 @@ function MembershipsView() {
 // 19. PURCHASE ORDERS VIEW (Phase 3)
 // -------------------------------------------------------------
 function PurchaseOrdersView() {
-  const { purchaseOrders, suppliers, branches, inventory, addPurchaseOrder, receivePurchaseOrder } = useERPStore();
+  const { purchaseOrders, suppliers, branches, inventory, addPurchaseOrder, receivePurchaseOrder, moduleLoading } = useERPStore();
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [expectedDate, setExpectedDate] = useState("");
@@ -3185,7 +3292,7 @@ function PurchaseOrdersView() {
       </SectionPanel>
 
       <SectionPanel title="Purchase Orders Ledger" subtitle="Procurement tracking and goods receipt">
-        <DataTable heads={["PO ID", "Supplier", "Items Ordered", "Total Cost", "Expected Date", "Status", "Actions"]}>
+        <DataTable heads={["PO ID", "Supplier", "Items Ordered", "Total Cost", "Expected Date", "Status", "Actions"]} loading={moduleLoading.purchaseOrders}>
           {purchaseOrders.map((po) => {
             const supp = suppliers.find((s) => s.id === po.supplierId);
             const isReceiving = receivingOrderId === po.id;

@@ -3,6 +3,10 @@
 import { create } from "zustand";
 import type { AppointmentTableItem } from "@/src/components/appointments/AppointmentTable";
 
+// Tracks the most recent refresh() call so a slower, superseded request can't
+// overwrite state with stale data once a later refresh() has already landed.
+let refreshSeq = 0;
+
 export type Customer = {
   id: string;
   name: string;
@@ -50,6 +54,9 @@ export type Invoice = {
   customerId: string;
   appointmentId?: string;
   amount: number;
+  amountPaid: number;
+  amountReceived?: number;
+  couponCode?: string;
   status: "Paid" | "Pending" | "Partially Paid" | "Refunded";
   createdAt: string;
 };
@@ -276,6 +283,8 @@ type ERPState = Snapshot & {
   website: Snapshot["website"];
   loading: boolean;
   hydrated: boolean;
+  moduleLoading: Record<string, boolean>;
+  attendanceFilters: { month?: string; date?: string };
   error: string | null;
   successMessage: string | null;
   hydrate: () => Promise<void>;
@@ -318,7 +327,7 @@ type ERPState = Snapshot & {
 
   // Invoices & Billing
   addInvoice: (
-    item: Omit<Invoice, "id" | "createdAt" | "invoiceNumber">,
+    item: Omit<Invoice, "id" | "createdAt" | "invoiceNumber" | "amountPaid">,
   ) => Promise<void>;
   updateInvoice: (id: string, item: Partial<Invoice>) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
@@ -532,6 +541,8 @@ export const useERPStore = create<ERPState>((set, get) => ({
   website: null,
   loading: true,
   hydrated: false,
+  moduleLoading: {},
+  attendanceFilters: {},
   error: null,
   successMessage: null,
 
@@ -567,6 +578,8 @@ export const useERPStore = create<ERPState>((set, get) => ({
       settings: emptySettings,
       loading: false,
       hydrated: false,
+      moduleLoading: {},
+      attendanceFilters: {},
       error: null,
       successMessage: null,
     }),
@@ -582,6 +595,17 @@ export const useERPStore = create<ERPState>((set, get) => ({
         ...snapshot,
         loading: false,
         hydrated: true,
+        moduleLoading: {
+          branches: true,
+          expenses: true,
+          attendance: true,
+          suppliers: true,
+          packages: true,
+          memberships: true,
+          coupons: true,
+          reviews: true,
+          purchaseOrders: true,
+        },
       });
       // Allow React to paint the primary dashboard before optional modules
       // compete for the local API connection pool.
@@ -609,11 +633,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   refresh: async () => {
+    const requestId = ++refreshSeq;
     try {
       const snapshot = await api<Snapshot>("/bootstrap");
+      // A newer refresh() call already landed; applying this stale one would revert it.
+      if (requestId !== refreshSeq) return;
       set({ ...snapshot, error: null });
     } catch (error) {
-      set({ error: message(error) });
+      if (requestId === refreshSeq) set({ error: message(error) });
     }
   },
 
@@ -860,7 +887,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
                     ...appointment,
                     payment: {
                       ...appointment.payment,
-                      status: item.status === "Paid" ? "Paid" : "Pending",
+                      status: item.status,
                     },
                   }
                 : appointment,
@@ -978,11 +1005,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
 
   // Extended Modules Actions
   fetchBranches: async () => {
+    set((state) => ({ moduleLoading: { ...state.moduleLoading, branches: true } }));
     try {
       const data = await api<unknown>("/branches");
       set({ branches: toList<Branch>(data) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, branches: false } }));
     }
   },
 
@@ -1045,11 +1075,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   fetchExpenses: async () => {
+    set((state) => ({ moduleLoading: { ...state.moduleLoading, expenses: true } }));
     try {
       const res = await api<unknown>("/expenses");
       set({ expenses: toList<Expense>(res) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, expenses: false } }));
     }
   },
 
@@ -1095,12 +1128,19 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   fetchAttendance: async (filters) => {
+    const effective = filters ?? get().attendanceFilters;
+    set((state) => ({
+      attendanceFilters: effective,
+      moduleLoading: { ...state.moduleLoading, attendance: true },
+    }));
     try {
-      const params = new URLSearchParams({ limit: "100", ...(filters?.month ? { month: filters.month } : {}), ...(filters?.date ? { date: filters.date } : {}) });
+      const params = new URLSearchParams({ limit: "100", ...(effective.month ? { month: effective.month } : {}), ...(effective.date ? { date: effective.date } : {}) });
       const res = await api<unknown>(`/attendance?${params}`);
       set({ attendance: toList<AttendanceRecord>(res) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, attendance: false } }));
     }
   },
 
@@ -1110,7 +1150,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
         method: "POST",
         body: JSON.stringify(input),
       });
-      await get().fetchAttendance();
+      await get().fetchAttendance(get().attendanceFilters);
       set({ successMessage: "Attendance recorded." });
     } catch (error) {
       set({ error: message(error) });
@@ -1126,7 +1166,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
           ...(checkOut ? { checkOut } : {}),
         }),
       });
-      await get().fetchAttendance();
+      await get().fetchAttendance(get().attendanceFilters);
       set({ successMessage: "Employee checked out." });
     } catch (error) {
       set({ error: message(error) });
@@ -1139,7 +1179,7 @@ export const useERPStore = create<ERPState>((set, get) => ({
         method: "PATCH",
         body: JSON.stringify(input),
       });
-      await get().fetchAttendance();
+      await get().fetchAttendance(get().attendanceFilters);
       set({ successMessage: "Attendance record updated." });
     } catch (error) {
       set({ error: message(error) });
@@ -1223,11 +1263,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   fetchSuppliers: async () => {
+    set((state) => ({ moduleLoading: { ...state.moduleLoading, suppliers: true } }));
     try {
       const res = await api<unknown>("/suppliers");
       set({ suppliers: toList<Supplier>(res) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, suppliers: false } }));
     }
   },
 
@@ -1274,11 +1317,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   fetchPackages: async () => {
+    set((state) => ({ moduleLoading: { ...state.moduleLoading, packages: true } }));
     try {
       const data = await api<unknown>("/packages");
       set({ packages: toList<Package>(data) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, packages: false } }));
     }
   },
 
@@ -1325,11 +1371,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   fetchMemberships: async () => {
+    set((state) => ({ moduleLoading: { ...state.moduleLoading, memberships: true } }));
     try {
       const data = await api<unknown>("/memberships/plans");
       set({ membershipPlans: toList<MembershipPlan>(data) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, memberships: false } }));
     }
   },
 
@@ -1388,11 +1437,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   fetchCoupons: async () => {
+    set((state) => ({ moduleLoading: { ...state.moduleLoading, coupons: true } }));
     try {
       const data = await api<unknown>("/coupons");
       set({ coupons: toList<Coupon>(data) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, coupons: false } }));
     }
   },
 
@@ -1439,11 +1491,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   fetchReviews: async () => {
+    set((state) => ({ moduleLoading: { ...state.moduleLoading, reviews: true } }));
     try {
       const data = await api<unknown>("/reviews");
       set({ reviews: toList<Review>(data) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, reviews: false } }));
     }
   },
 
@@ -1464,11 +1519,14 @@ export const useERPStore = create<ERPState>((set, get) => ({
   },
 
   fetchPurchaseOrders: async () => {
+    set((state) => ({ moduleLoading: { ...state.moduleLoading, purchaseOrders: true } }));
     try {
       const data = await api<unknown>("/purchase-orders");
       set({ purchaseOrders: toList<PurchaseOrder>(data) });
     } catch (error) {
       set({ error: message(error) });
+    } finally {
+      set((state) => ({ moduleLoading: { ...state.moduleLoading, purchaseOrders: false } }));
     }
   },
 

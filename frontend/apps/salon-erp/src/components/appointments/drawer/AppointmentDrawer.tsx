@@ -290,6 +290,8 @@ function AppointmentForm({
                   required
                   list="apt-customers"
                   autoComplete="off"
+                  pattern="[\p{L}\s'.-]+"
+                  title="Enter a valid name using letters only."
                   placeholder="e.g. Priya Sharma"
                   value={formData.customerName}
                   onChange={(e) => setName(e.target.value)}
@@ -310,8 +312,9 @@ function AppointmentForm({
                     required
                     type="tel"
                     inputMode="tel"
-                    minLength={5}
-                    placeholder="+91 98765 43210"
+                    pattern="\d{10}"
+                    title="Enter a valid 10-digit phone number."
+                    placeholder="9876543210"
                     value={formData.customerPhone}
                     onChange={(e) => setPhone(e.target.value)}
                     className={`${fieldClass} pl-9`}
