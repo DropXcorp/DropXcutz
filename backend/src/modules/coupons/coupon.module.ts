@@ -7,8 +7,10 @@ import { requireSalonAdmin } from "../../middleware/session.middleware";
 import { requireFeature } from "../../middleware/feature.middleware";
 import {
   couponInput,
+  couponPatch,
   couponValidation,
 } from "../../validators/coupon.validator";
+import { applyCoupon } from "./coupon.service";
 const dto = (x: any) => ({
   ...x,
   discountValue: Number(x.discountValue),
@@ -71,7 +73,7 @@ couponRouter.patch("/:id", requireSalonAdmin, async (req, res) => {
     dto(
       await prisma.coupon.update({
         where: { id: String(req.params.id) },
-        data: couponInput.partial().parse(req.body),
+        data: couponPatch.parse(req.body),
       }),
     ),
   );
@@ -87,22 +89,5 @@ couponRouter.delete("/:id", requireSalonAdmin, async (req, res) => {
 
 couponRouter.post("/validate", async (req: Request, res: Response) => {
   const input = couponValidation.parse(req.body);
-  const coupon = await prisma.coupon.findFirst({
-    where: { salonId: salonId(res), code: input.code, isActive: true },
-  });
-  if (!coupon || (coupon.expiryDate && coupon.expiryDate < new Date()))
-    throw new ApiError(400, "Coupon is invalid or expired.");
-  if (input.orderAmount < Number(coupon.minimumOrder))
-    throw new ApiError(400, "Minimum order amount is not met.");
-  let discount =
-    coupon.discountType === "PERCENTAGE"
-      ? (input.orderAmount * Number(coupon.discountValue)) / 100
-      : Number(coupon.discountValue);
-  if (coupon.maxDiscount !== null)
-    discount = Math.min(discount, Number(coupon.maxDiscount));
-  ok(res, {
-    coupon: dto(coupon),
-    discount,
-    finalAmount: Math.max(0, input.orderAmount - discount),
-  });
+  ok(res, await applyCoupon(salonId(res), input.code, input.orderAmount));
 });

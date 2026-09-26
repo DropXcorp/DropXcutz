@@ -1950,8 +1950,11 @@ function PlanEditor({
           />
           <input
             required
+            type="text"
             name="name"
             defaultValue={plan?.name}
+            pattern=".*[A-Za-z].*"
+            title="Plan name must contain at least one letter."
             placeholder="Plan name"
             className="rounded-xl border px-3 py-2.5"
           />

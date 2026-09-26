@@ -1,5 +1,5 @@
 import { z } from "zod";
-export const couponInput = z.object({
+const couponBase = z.object({
   code: z.string().trim().toUpperCase().min(1).max(60),
   discountType: z.enum(["PERCENTAGE", "FIXED"]),
   discountValue: z.coerce.number().positive(),
@@ -9,6 +9,14 @@ export const couponInput = z.object({
   usageLimit: z.coerce.number().int().positive().optional().nullable(),
   isActive: z.boolean().default(true),
 });
+const percentageWithinBounds = (value: { discountType?: string; discountValue?: number }) =>
+  value.discountType !== "PERCENTAGE" || value.discountValue === undefined || value.discountValue <= 100;
+const percentageRefinement = {
+  message: "A percentage discount cannot exceed 100.",
+  path: ["discountValue"],
+};
+export const couponInput = couponBase.refine(percentageWithinBounds, percentageRefinement);
+export const couponPatch = couponBase.partial().refine(percentageWithinBounds, percentageRefinement);
 export const couponValidation = z.object({
   code: z.string().trim().toUpperCase(),
   orderAmount: z.coerce.number().min(0),

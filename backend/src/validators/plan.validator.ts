@@ -15,7 +15,12 @@ const money = z.coerce
 
 export const planInput = z.object({
   code,
-  name: z.string().trim().min(1).max(100),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/[A-Za-z]/, "Plan name must contain at least one letter."),
   description: z.string().trim().max(5000).nullable().optional(),
   monthlyPrice: money,
   annualPrice: money,

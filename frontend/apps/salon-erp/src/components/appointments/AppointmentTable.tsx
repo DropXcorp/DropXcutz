@@ -42,7 +42,7 @@ export interface AppointmentTableItem {
 
   payment: {
     amount: number;
-    status: "Paid" | "Pending";
+    status: "Paid" | "Pending" | "Partially Paid" | "Refunded";
   };
 
   status:
